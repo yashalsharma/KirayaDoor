@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "KirayaDoor",
+    "slug": "kirayadoor",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      }
+    },
+    "web": {},
+    "extra": {
+      "apiBaseUrl": "http://localhost:5248"
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    Some Windows setups (notably OneDrive + Controlled Folder Access) can block build tooling
+    from writing under Desktop/Documents. Redirect build artifacts to LocalAppData.
+  -->
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$(LocalAppData)\KirayaDoorBuild\obj\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(LocalAppData)\KirayaDoorBuild\bin\</BaseOutputPath>
+  </PropertyGroup>
+</Project>
+

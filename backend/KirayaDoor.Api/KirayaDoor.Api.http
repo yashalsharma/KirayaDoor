@@ -1,0 +1,7 @@
+@KirayaDoor.Api_HostAddress = http://localhost:5248
+
+### Health Check
+GET {{KirayaDoor.Api_HostAddress}}/health
+Accept: application/json
+
+###
