@@ -263,4 +263,36 @@ export const propertyApi = {
       throw error;
     }
   },
+
+  // Delete a unit
+  deleteUnit: async (unitId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/units/${unitId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to delete unit';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting unit:', error);
+      throw error;
+    }
+  },
 };

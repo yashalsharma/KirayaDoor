@@ -1,291 +1,130 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   RefreshControl,
-  Dimensions,
-  Animated,
-  Easing,
-  PanResponder,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { propertyApi } from '../api/propertyApi';
+import ConfirmDialog from '../components/ConfirmDialog';
 
-const { width } = Dimensions.get('window');
-const ACTION_BUTTONS_WIDTH = 110; // Width of hidden action buttons (horizontal layout)
-
-function SwipeableUnitCard({
-  item,
-  index,
-  navigation,
-  onDelete,
-  propertyId,
-  onSwipeStateChange,
-}) {
-  const [swiped, setSwiped] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const pan = useRef(new Animated.ValueXY()).current;
-  const animationTimeoutRef = useRef(null);
-
+function UnitCard({ item, navigation, onEdit, onDelete }) {
   // Check if unit has any active tenant linked to it
   const isOccupied = item.tenants && item.tenants.length > 0;
 
-  useEffect(() => {
-    onSwipeStateChange?.(isAnimating);
-  }, [isAnimating, onSwipeStateChange]);
-
-  const completeAnimation = () => {
-    if (animationTimeoutRef.current) {
-      clearTimeout(animationTimeoutRef.current);
-    }
-    animationTimeoutRef.current = setTimeout(() => {
-      setIsAnimating(false);
-    }, 300);
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: (evt, gestureState) => {
-        return false;
-      },
-      onMoveShouldSetPanResponder: (evt, gestureState) => {
-        if (Math.abs(gestureState.dx) > 5) {
-          setIsAnimating(true);
-          return true;
-        }
-        return false;
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        // Allow small rubbery movement when swiping right (positive dx)
-        const displacement = Math.min(Math.max(gestureState.dx, -ACTION_BUTTONS_WIDTH), 10);
-        pan.x.setValue(displacement);
-      },
-      onPanResponderRelease: (evt, gestureState) => {
-        const velocity = gestureState.vx;
-        const shouldOpen = gestureState.dx < -50 || (gestureState.dx < -30 && velocity < -0.5);
-        const targetValue = shouldOpen ? -ACTION_BUTTONS_WIDTH : 0;
-        
-        setSwiped(shouldOpen);
-        
-        Animated.timing(pan.x, {
-          toValue: targetValue,
-          duration: 300,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: false,
-        }).start(completeAnimation);
-      },
-    })
-  ).current;
-
-  const resetSwipe = () => {
-    setSwiped(false);
-    setIsAnimating(true);
-    Animated.timing(pan.x, {
-      toValue: 0,
-      duration: 300,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: false,
-    }).start(completeAnimation);
-  };
-
-  const handleEdit = () => {
-    resetSwipe();
-    // TODO: Navigate to edit unit screen
-    Alert.alert('Edit', `Editing ${item.unitName}`);
-  };
-
-  const handleDelete = () => {
-    resetSwipe();
-    onDelete(item.unitId);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (animationTimeoutRef.current) {
-        clearTimeout(animationTimeoutRef.current);
-      }
-    };
-  }, []);
-
   return (
-    <View
+    <TouchableOpacity
+      onPress={() => onEdit(item)}
       style={{
-        width: width - 32,
-        marginBottom: 12,
-        overflow: 'hidden',
+        backgroundColor: 'white',
         borderRadius: 16,
-        position: 'relative',
+        paddingHorizontal: 16,
+        paddingVertical: 14,
+        marginBottom: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
       }}
     >
-      {/* Hidden Action Buttons - Horizontal */}
-      <View
-        style={{
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: ACTION_BUTTONS_WIDTH,
-          backgroundColor: 'transparent',
-          paddingHorizontal: 6,
-          paddingVertical: 12,
-          zIndex: 1,
-          flexDirection: 'row',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: 6,
-        }}
-      >
-        <TouchableOpacity
-          onPress={handleEdit}
+      {/* Left Section: Icon + Info */}
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        {/* Unit Icon */}
+        <View
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: '#2563eb',
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: '#f3f4f6',
             justifyContent: 'center',
             alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.2,
-            shadowRadius: 4,
-            elevation: 5,
           }}
         >
-          <Ionicons name="pencil" size={18} color="#ffffff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleDelete}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            backgroundColor: '#dc2626',
-            justifyContent: 'center',
-            alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.2,
-            shadowRadius: 4,
-            elevation: 5,
-          }}
-        >
-          <Ionicons name="trash" size={18} color="#ffffff" />
-        </TouchableOpacity>
-      </View>
+          <Ionicons name="home" size={20} color="#c41e3a" />
+        </View>
 
-      {/* Swipeable Card */}
-      <Animated.View
-        {...panResponder.panHandlers}
-        style={{
-          transform: [{ translateX: pan.x }],
-          zIndex: 2,
-          borderRadius: 16,
-          overflow: 'hidden',
-        }}
-      >
-        <TouchableOpacity
-          onPress={() => {
-            if (swiped) {
-              resetSwipe();
-            } else {
-              // TODO: Navigate to unit details when tapping card
-              Alert.alert('Unit Details', `Viewing ${item.unitName}`);
-            }
-          }}
-          activeOpacity={1}
-        >
-          <View
+        {/* Unit Info */}
+        <View style={{ flex: 1 }}>
+          <Text
             style={{
-              backgroundColor: 'white',
-              borderRadius: 16,
-              paddingHorizontal: 16,
-              paddingVertical: 14,
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 12,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 4,
-              elevation: 2,
+              fontSize: 15,
+              fontWeight: '600',
+              color: '#1e2939',
+              marginBottom: 2,
             }}
           >
-            {/* Unit Icon */}
-            <View
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: '#f3f4f6',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <Ionicons name="home" size={20} color="#c41e3a" />
-            </View>
+            {item.unitName}
+          </Text>
+          <Text
+            style={{
+              fontSize: 12,
+              color: '#9ca3af',
+            }}
+          >
+            Tap to view actions
+          </Text>
+        </View>
+      </View>
 
-            {/* Unit Info */}
-            <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: '600',
-                  color: '#1e2939',
-                  marginBottom: 2,
-                }}
-              >
-                {item.unitName}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 12,
-                  color: '#9ca3af',
-                }}
-              >
-                Tap to edit
-              </Text>
-            </View>
+      {/* Middle Section: Status Badge */}
+      <View
+        style={{
+          backgroundColor: isOccupied ? '#dcfce7' : '#f3f4f6',
+          borderRadius: 12,
+          paddingHorizontal: 10,
+          paddingVertical: 6,
+          marginHorizontal: 12,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 11,
+            fontWeight: '600',
+            color: isOccupied ? '#22c55e' : '#6b7280',
+          }}
+        >
+          {isOccupied ? 'OCCUPIED' : 'VACANT'}
+        </Text>
+      </View>
 
-            {/* Status Badge */}
-            <View
-              style={{
-                backgroundColor: isOccupied ? '#dcfce7' : '#f3f4f6',
-                borderRadius: 12,
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: '600',
-                  color: isOccupied ? '#22c55e' : '#6b7280',
-                }}
-              >
-                {isOccupied ? 'OCCUPIED' : 'VACANT'}
-              </Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Animated.View>
-    </View>
+      {/* Right Section: Delete Button */}
+      <TouchableOpacity
+        onPress={() => onDelete(item.unitId)}
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 18,
+          backgroundColor: '#fee2e2',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <Ionicons name="trash" size={16} color="#dc2626" />
+      </TouchableOpacity>
+    </TouchableOpacity>
   );
 }
 
 export default function UnitsScreen({ navigation, route }) {
   const { propertyId, propertyName } = route.params;
+  const insets = useSafeAreaInsets();
   const [units, setUnits] = useState([]);
   const [property, setProperty] = useState(null);
   const [pendingAmount, setPendingAmount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [isCardSwiping, setIsCardSwiping] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [unitToDelete, setUnitToDelete] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -329,42 +168,41 @@ export default function UnitsScreen({ navigation, route }) {
     }
   }, [propertyId]);
 
-  const handleDeleteUnit = async (unitId) => {
-    Alert.alert(
-      'Delete Unit',
-      'Are you sure you want to delete this unit?',
-      [
-        { text: 'Cancel', onPress: () => {} },
-        {
-          text: 'Delete',
-          onPress: async () => {
-            try {
-              // TODO: Call API to delete unit
-              setUnits(units.filter(u => u.unitId !== unitId));
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete unit');
-            }
-          },
-        },
-      ]
-    );
+  const handleEditUnit = (unit) => {
+    // TODO: Navigate to edit unit screen
+    // Alert.alert('Edit Unit', `Editing ${unit.unitName}`);
+  };
+
+  const handleDeleteUnit = (unitId) => {
+    setUnitToDelete(unitId);
+    setDeleteDialogVisible(true);
+  };
+
+  const confirmDeleteUnit = async () => {
+    if (!unitToDelete) return;
+    
+    try {
+      await propertyApi.deleteUnit(unitToDelete);
+      setUnits(units.filter(u => u.unitId !== unitToDelete));
+      setDeleteDialogVisible(false);
+      setUnitToDelete(null);
+    } catch (error) {
+      setDeleteDialogVisible(false);
+      setUnitToDelete(null);
+      // Could show error dialog here if needed
+      console.error('Error deleting unit:', error);
+    }
+  };
+
+  const cancelDeleteUnit = () => {
+    setDeleteDialogVisible(false);
+    setUnitToDelete(null);
   };
 
   const truncateText = (text, maxLength = 35) => {
     if (!text) return '';
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
   };
-
-  const renderUnitCard = ({ item }) => (
-    <SwipeableUnitCard
-      item={item}
-      index={units.indexOf(item)}
-      navigation={navigation}
-      onDelete={handleDeleteUnit}
-      propertyId={propertyId}
-      onSwipeStateChange={setIsCardSwiping}
-    />
-  );
 
   if (loading) {
     return (
@@ -460,7 +298,14 @@ export default function UnitsScreen({ navigation, route }) {
       <View style={{ flex: 1 }}>
         <FlatList
           data={units}
-          renderItem={renderUnitCard}
+          renderItem={({ item }) => (
+            <UnitCard
+              item={item}
+              navigation={navigation}
+              onEdit={handleEditUnit}
+              onDelete={handleDeleteUnit}
+            />
+          )}
           keyExtractor={(item) => item.unitId.toString()}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -469,7 +314,6 @@ export default function UnitsScreen({ navigation, route }) {
             paddingHorizontal: 16,
             paddingVertical: 12,
           }}
-          scrollEnabled={!isCardSwiping}
         />
       </View>
 
@@ -480,7 +324,8 @@ export default function UnitsScreen({ navigation, route }) {
           borderTopWidth: 1,
           borderTopColor: '#e5e7eb',
           paddingHorizontal: 16,
-          paddingVertical: 14,
+          paddingTop: 14,
+          paddingBottom: 14 + insets.bottom,
           flexDirection: 'row',
           justifyContent: 'space-between',
           shadowColor: '#000',
@@ -507,6 +352,18 @@ export default function UnitsScreen({ navigation, route }) {
           </Text>
         </View>
       </View>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        title="Delete Unit"
+        message="Are you sure you want to delete this unit? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDeleteUnit}
+        onCancel={cancelDeleteUnit}
+        isDangerous={true}
+      />
     </LinearGradient>
   );
 }

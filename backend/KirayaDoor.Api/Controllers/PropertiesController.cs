@@ -152,6 +152,58 @@ namespace KirayaDoor.Api.Controllers
             }
         }
 
+        // DELETE: api/properties/units/{unitId}
+        [HttpDelete("units/{unitId}")]
+#pragma warning disable CS8620
+        public async Task<IActionResult> DeleteUnit(int unitId)
+        {
+            try
+            {
+                var unit = await _context.Units
+                    .Include(u => u.Tenants)
+                    .ThenInclude(t => t!.TenantExpenses)
+                    .Include(u => u.Tenants)
+                    .ThenInclude(t => t!.PaidExpenses)
+                    .FirstOrDefaultAsync(u => u.UnitId == unitId);
+
+                if (unit == null)
+                {
+                    return NotFound(new { error = "Unit not found" });
+                }
+
+                // Delete all related data
+                foreach (var tenant in unit.Tenants ?? new List<Tenant>())
+                {
+                    // Delete tenant expenses
+                    if (tenant.TenantExpenses != null)
+                    {
+                        _context.TenantExpenses.RemoveRange(tenant.TenantExpenses);
+                    }
+
+                    // Delete paid expenses
+                    if (tenant.PaidExpenses != null)
+                    {
+                        _context.PaidExpenses.RemoveRange(tenant.PaidExpenses);
+                    }
+                }
+
+                // Delete tenants
+                _context.Tenants.RemoveRange(unit.Tenants ?? new List<Tenant>());
+
+                // Delete unit
+                _context.Units.Remove(unit);
+
+                await _context.SaveChangesAsync();
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+#pragma warning restore CS8620
+
         // POST: api/properties
         [HttpPost]
         public async Task<ActionResult<PropertyDto>> CreateProperty([FromBody] CreatePropertyRequest request)

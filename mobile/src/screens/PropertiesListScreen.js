@@ -4,7 +4,6 @@ import {
   Text,
   FlatList,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   RefreshControl,
   Dimensions,
@@ -16,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { propertyApi } from '../api/propertyApi';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const { width } = Dimensions.get('window');
 const ACTION_BUTTONS_WIDTH = 80; // Width of hidden action buttons (vertical layout)
@@ -37,17 +37,26 @@ function SwipeablePropertyCard({
   onDelete,
   onPropertyTap,
   onSwipeStateChange,
+  isCardSwiping,
+  scrollTimeoutRef,
 }) {
   const color = colorPalette[index % colorPalette.length];
   const [swiped, setSwiped] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const pan = useRef(new Animated.ValueXY()).current;
   const animationTimeoutRef = useRef(null);
+  const isCardSwipingRef = useRef(isCardSwiping);
+  const gestureTypeRef = useRef(null); // Track: 'swipe', 'scroll', or null
 
-  // Notify parent whenever animation state changes
+  // Update ref with current isCardSwiping value
   useEffect(() => {
-    onSwipeStateChange?.(isAnimating);
-  }, [isAnimating, onSwipeStateChange]);
+    isCardSwipingRef.current = isCardSwiping;
+  }, [isCardSwiping]);
+
+  // Notify parent whenever animation state changes or card is swiped
+  useEffect(() => {
+    onSwipeStateChange?.(isAnimating || swiped);
+  }, [isAnimating, swiped, onSwipeStateChange]);
 
   const completeAnimation = () => {
     // Clear any existing timeout
@@ -66,11 +75,37 @@ function SwipeablePropertyCard({
         return false;
       },
       onMoveShouldSetPanResponder: (evt, gestureState) => {
-        // When horizontal movement is detected, lock all interactions
-        if (Math.abs(gestureState.dx) > 5) {
+        // If already committed to a gesture type, stick with it
+        if (gestureTypeRef.current !== null) {
+          return gestureTypeRef.current === 'swipe';
+        }
+
+        // Check if list is currently scrolling - if yes, don't capture gesture
+        const isListScrolling = scrollTimeoutRef.current !== null;
+        if (isListScrolling) {
+          gestureTypeRef.current = 'scroll';
+          return false;
+        }
+
+        // Disable interaction if another card is already swiping/animating
+        if (isCardSwipingRef.current && !isAnimating && !swiped) {
+          gestureTypeRef.current = 'scroll';
+          return false;
+        }
+
+        // Determine gesture type based on initial movement
+        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.5 && Math.abs(gestureState.dx) > 10;
+        const isVerticalScroll = Math.abs(gestureState.dy) > Math.abs(gestureState.dx) * 1.5 && Math.abs(gestureState.dy) > 10;
+
+        if (isVerticalScroll) {
+          gestureTypeRef.current = 'scroll';
+          return false;
+        } else if (isHorizontalSwipe) {
+          gestureTypeRef.current = 'swipe';
           setIsAnimating(true);
           return true;
         }
+
         return false;
       },
       onPanResponderMove: (evt, gestureState) => {
@@ -86,6 +121,7 @@ function SwipeablePropertyCard({
         const targetValue = shouldOpen ? -ACTION_BUTTONS_WIDTH : 0;
         
         setSwiped(shouldOpen);
+        setIsAnimating(true);
         
         // Animate to final position with smooth easing curve
         Animated.timing(pan.x, {
@@ -93,7 +129,11 @@ function SwipeablePropertyCard({
           duration: 300,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: false,
-        }).start(completeAnimation);
+        }).start(() => {
+          // Reset gesture type after animation completes
+          gestureTypeRef.current = null;
+          completeAnimation();
+        });
       },
     })
   ).current;
@@ -214,8 +254,8 @@ function SwipeablePropertyCard({
             if (swiped) {
               // If card is swiped, close it first
               resetSwipe();
-            } else {
-              // Navigate only when card is fully closed
+            } else if (!isCardSwipingRef.current) {
+              // Navigate only when card is fully closed and no other card is swiped
               onPropertyTap(item.propertyId, item.propertyName);
             }
           }}
@@ -328,10 +368,13 @@ function SwipeablePropertyCard({
 
 export default function PropertiesListScreen({ navigation, route }) {
   const { userName, userId } = route.params;
+  const scrollTimeoutRef = useRef(null);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isCardSwiping, setIsCardSwiping] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [propertyToDelete, setPropertyToDelete] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -363,25 +406,29 @@ export default function PropertiesListScreen({ navigation, route }) {
     }
   }, [userId]);
 
-  const handleDeleteProperty = async (propertyId) => {
-    Alert.alert(
-      'Delete Property',
-      'Are you sure you want to delete this property?',
-      [
-        { text: 'Cancel', onPress: () => {} },
-        {
-          text: 'Delete',
-          onPress: async () => {
-            try {
-              await propertyApi.deleteProperty(propertyId);
-              fetchProperties();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete property');
-            }
-          },
-        },
-      ]
-    );
+  const handleDeleteProperty = (propertyId) => {
+    setPropertyToDelete(propertyId);
+    setDeleteDialogVisible(true);
+  };
+
+  const confirmDeleteProperty = async () => {
+    if (!propertyToDelete) return;
+
+    try {
+      await propertyApi.deleteProperty(propertyToDelete);
+      await fetchProperties();
+      setDeleteDialogVisible(false);
+      setPropertyToDelete(null);
+    } catch (error) {
+      setDeleteDialogVisible(false);
+      setPropertyToDelete(null);
+      console.error('Error deleting property:', error);
+    }
+  };
+
+  const cancelDeleteProperty = () => {
+    setDeleteDialogVisible(false);
+    setPropertyToDelete(null);
   };
 
   const renderPropertyCard = ({ item, index }) => (
@@ -397,6 +444,8 @@ export default function PropertiesListScreen({ navigation, route }) {
           propertyName,
         })
       }
+      isCardSwiping={isCardSwiping}
+      scrollTimeoutRef={scrollTimeoutRef}
     />
   );
 
@@ -525,12 +574,35 @@ export default function PropertiesListScreen({ navigation, route }) {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
+          onScroll={() => {
+            // Clear existing timeout
+            if (scrollTimeoutRef.current) {
+              clearTimeout(scrollTimeoutRef.current);
+            }
+            // Set timeout to detect when scrolling has ended (500ms of no scroll events)
+            scrollTimeoutRef.current = setTimeout(() => {
+              scrollTimeoutRef.current = null;
+            }, 500);
+          }}
+          scrollEventThrottle={16}
           contentContainerStyle={{
             paddingVertical: 16,
           }}
           scrollEnabled={!isCardSwiping}
         />
       </View>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        title="Delete Property"
+        message="Are you sure you want to delete this property and all its units? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDeleteProperty}
+        onCancel={cancelDeleteProperty}
+        isDangerous={true}
+      />
     </LinearGradient>
   );
 }
