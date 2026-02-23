@@ -18,7 +18,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { propertyApi } from '../api/propertyApi';
 
 const { width } = Dimensions.get('window');
-const ACTION_BUTTONS_WIDTH = 75; // Width of hidden action buttons (horizontal layout)
+const ACTION_BUTTONS_WIDTH = 110; // Width of hidden action buttons (horizontal layout)
 
 function SwipeableUnitCard({
   item,
@@ -67,7 +67,7 @@ function SwipeableUnitCard({
       },
       onPanResponderRelease: (evt, gestureState) => {
         const velocity = gestureState.vx;
-        const shouldOpen = gestureState.dx < -40 || (gestureState.dx < -20 && velocity < -0.5);
+        const shouldOpen = gestureState.dx < -50 || (gestureState.dx < -30 && velocity < -0.5);
         const targetValue = shouldOpen ? -ACTION_BUTTONS_WIDTH : 0;
         
         setSwiped(shouldOpen);
@@ -119,6 +119,7 @@ function SwipeableUnitCard({
         marginBottom: 12,
         overflow: 'hidden',
         borderRadius: 16,
+        position: 'relative',
       }}
     >
       {/* Hidden Action Buttons - Horizontal */}
@@ -130,21 +131,21 @@ function SwipeableUnitCard({
           bottom: 0,
           width: ACTION_BUTTONS_WIDTH,
           backgroundColor: 'transparent',
-          paddingHorizontal: 8,
+          paddingHorizontal: 6,
           paddingVertical: 12,
           zIndex: 1,
           flexDirection: 'row',
           justifyContent: 'center',
           alignItems: 'center',
-          gap: 8,
+          gap: 6,
         }}
       >
         <TouchableOpacity
           onPress={handleEdit}
           style={{
-            width: 48,
-            height: 48,
-            borderRadius: 24,
+            width: 40,
+            height: 40,
+            borderRadius: 20,
             backgroundColor: '#2563eb',
             justifyContent: 'center',
             alignItems: 'center',
@@ -155,14 +156,14 @@ function SwipeableUnitCard({
             elevation: 5,
           }}
         >
-          <Ionicons name="pencil" size={20} color="#ffffff" />
+          <Ionicons name="pencil" size={18} color="#ffffff" />
         </TouchableOpacity>
         <TouchableOpacity
           onPress={handleDelete}
           style={{
-            width: 48,
-            height: 48,
-            borderRadius: 24,
+            width: 40,
+            height: 40,
+            borderRadius: 20,
             backgroundColor: '#dc2626',
             justifyContent: 'center',
             alignItems: 'center',
@@ -173,7 +174,7 @@ function SwipeableUnitCard({
             elevation: 5,
           }}
         >
-          <Ionicons name="trash" size={20} color="#ffffff" />
+          <Ionicons name="trash" size={18} color="#ffffff" />
         </TouchableOpacity>
       </View>
 
@@ -183,6 +184,8 @@ function SwipeableUnitCard({
         style={{
           transform: [{ translateX: pan.x }],
           zIndex: 2,
+          borderRadius: 16,
+          overflow: 'hidden',
         }}
       >
         <TouchableOpacity

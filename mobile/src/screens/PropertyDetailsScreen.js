@@ -129,14 +129,24 @@ export default function PropertyDetailsScreen({ navigation, route }) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        {/* Back Button Header */}
+        {/* Consistent Header - Figma Style */}
         <View
           style={{
+            backgroundColor: 'white',
             paddingTop: 48,
             paddingHorizontal: 16,
             paddingBottom: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 6,
+            elevation: 3,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
+          {/* Back Button - Figma Style */}
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={{
@@ -150,6 +160,33 @@ export default function PropertyDetailsScreen({ navigation, route }) {
           >
             <Ionicons name="chevron-back" size={22} color="#4f39f6" />
           </TouchableOpacity>
+
+          {/* Header Title - Center */}
+          <View style={{ flex: 1, marginHorizontal: 12, justifyContent: 'center' }}>
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: 'bold',
+                color: '#1e2939',
+              }}
+            >
+              {isNew ? 'Add Property' : 'Edit Property'}
+            </Text>
+          </View>
+
+          {/* Header Icon */}
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: '#e0e7ff',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="home" size={22} color="#4f39f6" />
+          </View>
         </View>
 
         <ScrollView

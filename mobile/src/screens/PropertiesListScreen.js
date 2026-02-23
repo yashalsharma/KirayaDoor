@@ -469,11 +469,11 @@ export default function PropertiesListScreen({ navigation, route }) {
       end={{ x: 1, y: 1 }}
       style={{ flex: 1 }}
     >
-      {/* Fixed Header */}
+      {/* Fixed Header - Same height as Units Screen */}
       <View
         style={{
           backgroundColor: 'white',
-          paddingTop: 48,
+          paddingTop: 58,
           paddingHorizontal: 16,
           paddingBottom: 12,
           shadowColor: '#000',
