@@ -498,7 +498,7 @@ export default function UnitsScreen({ navigation, route }) {
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={{ fontSize: 12, color: '#9ca3af', marginBottom: 4 }}>
-            Total Rent Due
+            Total Amount Due
           </Text>
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1e2939' }}>
             ₹ 0

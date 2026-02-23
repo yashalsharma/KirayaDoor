@@ -14,6 +14,9 @@ namespace KirayaDoor.Api.Data.Entities
         [Required]
         public int ExpenseTypeId { get; set; }
 
+        // Link to specific tenant expense (optional - can be null for manual payments)
+        public int? TenantExpenseId { get; set; }
+
         [Required]
         public DateTime PaymentDate { get; set; }
 
@@ -28,5 +31,8 @@ namespace KirayaDoor.Api.Data.Entities
 
         [ForeignKey("ExpenseTypeId")]
         public virtual ExpenseType? ExpenseType { get; set; }
+
+        [ForeignKey("TenantExpenseId")]
+        public virtual TenantExpense? TenantExpense { get; set; }
     }
 }

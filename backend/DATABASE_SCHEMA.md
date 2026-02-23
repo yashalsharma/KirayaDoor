@@ -118,13 +118,15 @@ Stores recurring or one-time expense records for tenants.
 | TenantExpenseTypeId | int | FK, NOT NULL | References ExpenseTypes.ExpenseTypeId |
 | TenantExpenseCycleId | int | FK, NOT NULL | References ExpenseCycles.ExpenseCycleId |
 | TenantExpenseStartDate | datetime2 | NOT NULL | When the expense starts |
-| TenantExpenseAmount | decimal(18,2) | NOT NULL, > 0 | Amount of expense |
+| TenantExpenseEndDate | datetime2 | NULL | When the expense ends (e.g., tenant moves out) - null means ongoing |
+| TenantExpenseAmount | decimal(18,2) | NOT NULL, > 0 | Amount of expense per cycle |
 | Comments | nvarchar(500) | NULL | Additional notes |
 
 **Relationships:**
 - FK to Tenants (TenantId)
 - FK to ExpenseTypes (TenantExpenseTypeId)
 - FK to ExpenseCycles (TenantExpenseCycleId)
+- One TenantExpense can have many PaidExpenses (1:N)
 
 ---
 
@@ -135,12 +137,16 @@ Stores payment records for tenant expenses.
 |--------|------|-------------|-------|
 | PaidExpenseId | int | PK, IDENTITY(1,1) | Primary Key |
 | TenantId | int | FK, NOT NULL | References Tenants.TenantId |
+| ExpenseTypeId | int | FK, NOT NULL | References ExpenseTypes.ExpenseTypeId |
+| TenantExpenseId | int | FK, NULL | References TenantExpenses.TenantExpenseId - Links to specific recurring expense |
 | PaymentDate | datetime2 | NOT NULL | Date of payment |
 | PaymentAmount | decimal(18,2) | NOT NULL, > 0 | Amount paid |
 | Comments | nvarchar(500) | NULL | Additional notes |
 
 **Relationships:**
 - FK to Tenants (TenantId) - Many PaidExpenses per Tenant
+- FK to ExpenseTypes (ExpenseTypeId)
+- FK to TenantExpenses (TenantExpenseId) - Many PaidExpenses per TenantExpense (optional, for manual payments)
 
 ---
 

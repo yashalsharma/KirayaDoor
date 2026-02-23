@@ -20,6 +20,9 @@ namespace KirayaDoor.Api.Data.Entities
         [Required]
         public DateTime TenantExpenseStartDate { get; set; }
 
+        // When the expense ends (e.g., tenant moves out) - null means ongoing
+        public DateTime? TenantExpenseEndDate { get; set; }
+
         [Required]
         public decimal TenantExpenseAmount { get; set; }
 
@@ -34,5 +37,8 @@ namespace KirayaDoor.Api.Data.Entities
 
         [ForeignKey("TenantExpenseCycleId")]
         public virtual ExpenseCycle? ExpenseCycle { get; set; }
+
+        // Link to paid expenses
+        public virtual ICollection<PaidExpense>? PaidExpenses { get; set; }
     }
 }
