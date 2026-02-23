@@ -27,6 +27,7 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddSingleton<IOtpCacheService, OtpCacheService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<PendingAmountService>();
 
 // Add Controllers
 builder.Services.AddControllers();

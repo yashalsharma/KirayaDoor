@@ -33,7 +33,7 @@ function SwipeableUnitCard({
   const pan = useRef(new Animated.ValueXY()).current;
   const animationTimeoutRef = useRef(null);
 
-  // Check if unit has tenants
+  // Check if unit has any active tenant linked to it
   const isOccupied = item.tenants && item.tenants.length > 0;
 
   useEffect(() => {
@@ -62,7 +62,8 @@ function SwipeableUnitCard({
         return false;
       },
       onPanResponderMove: (evt, gestureState) => {
-        const displacement = Math.min(Math.max(gestureState.dx, -ACTION_BUTTONS_WIDTH), 0);
+        // Allow small rubbery movement when swiping right (positive dx)
+        const displacement = Math.min(Math.max(gestureState.dx, -ACTION_BUTTONS_WIDTH), 10);
         pan.x.setValue(displacement);
       },
       onPanResponderRelease: (evt, gestureState) => {
@@ -226,7 +227,7 @@ function SwipeableUnitCard({
                 alignItems: 'center',
               }}
             >
-              <Ionicons name="home" size={20} color="#6b7280" />
+              <Ionicons name="home" size={20} color="#c41e3a" />
             </View>
 
             {/* Unit Info */}
@@ -281,6 +282,7 @@ export default function UnitsScreen({ navigation, route }) {
   const { propertyId, propertyName } = route.params;
   const [units, setUnits] = useState([]);
   const [property, setProperty] = useState(null);
+  const [pendingAmount, setPendingAmount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isCardSwiping, setIsCardSwiping] = useState(false);
@@ -294,16 +296,14 @@ export default function UnitsScreen({ navigation, route }) {
   const fetchPropertyAndUnits = async () => {
     try {
       setLoading(true);
-      const propertyData = await propertyApi.getProperty(propertyId);
-      setProperty(propertyData);
-      // TODO: Fetch units for this property
-      // For now, use mock data
-      setUnits([
-        { unitId: 1, unitName: 'Unit 1', propertyId, tenants: [] },
-        { unitId: 2, unitName: 'Unit 2', propertyId, tenants: [{ tenantId: 1 }] },
-        { unitId: 3, unitName: 'Unit 3', propertyId, tenants: [] },
-        { unitId: 4, unitName: 'Unit 4', propertyId, tenants: [{ tenantId: 2 }, { tenantId: 3 }] },
+      const [propertyData, unitsData, pendingAmountData] = await Promise.all([
+        propertyApi.getProperty(propertyId),
+        propertyApi.getUnits(propertyId),
+        propertyApi.getPendingAmount(propertyId),
       ]);
+      setProperty(propertyData);
+      setUnits(unitsData);
+      setPendingAmount(pendingAmountData);
     } catch (error) {
       Alert.alert('Error', error.message || 'Failed to fetch data');
     } finally {
@@ -314,15 +314,14 @@ export default function UnitsScreen({ navigation, route }) {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      const propertyData = await propertyApi.getProperty(propertyId);
-      setProperty(propertyData);
-      // TODO: Fetch units for this property
-      setUnits([
-        { unitId: 1, unitName: 'Unit 1', propertyId, tenants: [] },
-        { unitId: 2, unitName: 'Unit 2', propertyId, tenants: [{ tenantId: 1 }] },
-        { unitId: 3, unitName: 'Unit 3', propertyId, tenants: [] },
-        { unitId: 4, unitName: 'Unit 4', propertyId, tenants: [{ tenantId: 2 }, { tenantId: 3 }] },
+      const [propertyData, unitsData, pendingAmountData] = await Promise.all([
+        propertyApi.getProperty(propertyId),
+        propertyApi.getUnits(propertyId),
+        propertyApi.getPendingAmount(propertyId),
       ]);
+      setProperty(propertyData);
+      setUnits(unitsData);
+      setPendingAmount(pendingAmountData);
     } catch (error) {
       Alert.alert('Error', error.message || 'Failed to refresh data');
     } finally {
@@ -453,7 +452,7 @@ export default function UnitsScreen({ navigation, route }) {
             alignItems: 'center',
           }}
         >
-          <Ionicons name="home" size={22} color="#4f39f6" />
+          <Ionicons name="home" size={22} color="#c41e3a" />
         </View>
       </View>
 
@@ -504,7 +503,7 @@ export default function UnitsScreen({ navigation, route }) {
             Total Amount Due
           </Text>
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1e2939' }}>
-            ₹ 0
+            ₹ {pendingAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
           </Text>
         </View>
       </View>

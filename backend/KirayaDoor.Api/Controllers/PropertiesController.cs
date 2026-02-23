@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using KirayaDoor.Api.Data;
 using KirayaDoor.Api.Data.Entities;
+using KirayaDoor.Api.Services;
 
 namespace KirayaDoor.Api.Controllers
 {
@@ -81,6 +82,69 @@ namespace KirayaDoor.Api.Controllers
                 };
 
                 return Ok(propertyDto);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // GET: api/properties/{id}/pending-amount
+        [HttpGet("{id}/pending-amount")]
+        public async Task<ActionResult<PendingAmountDto>> GetPropertyPendingAmount(int id)
+        {
+            try
+            {
+                var pendingAmountService = HttpContext.RequestServices.GetRequiredService<PendingAmountService>();
+                var pendingAmount = await pendingAmountService.CalculatePropertyPendingAmountAsync(id);
+                return Ok(new PendingAmountDto { PendingAmount = pendingAmount });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // GET: api/properties/{id}/units
+        [HttpGet("{id}/units")]
+        public async Task<ActionResult<IEnumerable<UnitDto>>> GetUnitsWithTenants(int id)
+        {
+            try
+            {
+                // Load property with units
+                var property = await _context.Properties
+                    .Include(p => p.Units)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(p => p.PropertyId == id);
+
+                if (property == null)
+                {
+                    return NotFound(new { error = "Property not found" });
+                }
+
+                // Load tenants for all units
+                var unitIds = property.Units?.Select(u => u.UnitId).ToList() ?? new List<int>();
+                var unitsWithTenants = await _context.Units
+                    .Where(u => unitIds.Contains(u.UnitId))
+                    .Include(u => u.Tenants)
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                var unitDtos = unitsWithTenants.Select(u => new UnitDto
+                {
+                    UnitId = u.UnitId,
+                    UnitName = u.UnitName,
+                    PropertyId = u.PropertyId,
+                    Tenants = u.Tenants?.Select(t => new TenantDto
+                    {
+                        TenantId = t.TenantId,
+                        TenantName = t.TenantName,
+                        TenantContactNumber = t.TenantContactNumber,
+                        IsActive = t.IsActive
+                    }).ToList() ?? new List<TenantDto>()
+                }).ToList() ?? new List<UnitDto>();
+
+                return Ok(unitDtos);
             }
             catch (Exception ex)
             {
@@ -332,5 +396,26 @@ namespace KirayaDoor.Api.Controllers
         public string? PropertyName { get; set; }
         public string? AddressText { get; set; }
         public string? Location { get; set; }
+    }
+
+    public class UnitDto
+    {
+        public int UnitId { get; set; }
+        public string UnitName { get; set; } = string.Empty;
+        public int PropertyId { get; set; }
+        public List<TenantDto> Tenants { get; set; } = new List<TenantDto>();
+    }
+
+    public class TenantDto
+    {
+        public int TenantId { get; set; }
+        public string TenantName { get; set; } = string.Empty;
+        public string TenantContactNumber { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+    }
+
+    public class PendingAmountDto
+    {
+        public decimal PendingAmount { get; set; }
     }
 }
