@@ -199,9 +199,7 @@ namespace KirayaDoor.Api.Services
         {
             var units = await _context.Units
                 .Where(u => u.PropertyId == propertyId)
-                .Include(u => u.Tenants)
-                .ThenInclude(t => t.TenantExpenses)
-                .ThenInclude(te => te.PaidExpenses)
+                .AsNoTracking()
                 .ToListAsync();
 
             var breakdown = new PendingAmountBreakdown
@@ -212,6 +210,11 @@ namespace KirayaDoor.Api.Services
 
             foreach (var unit in units)
             {
+                var tenants = await _context.Tenants
+                    .Where(t => t.UnitId == unit.UnitId)
+                    .AsNoTracking()
+                    .ToListAsync();
+
                 var unitBreakdown = new UnitPendingAmountBreakdown
                 {
                     UnitId = unit.UnitId,
@@ -219,7 +222,7 @@ namespace KirayaDoor.Api.Services
                     Tenants = new List<TenantPendingAmountBreakdown>()
                 };
 
-                foreach (var tenant in unit.Tenants ?? new List<Tenant>())
+                foreach (var tenant in tenants)
                 {
                     var tenantBreakdown = new TenantPendingAmountBreakdown
                     {
@@ -233,6 +236,7 @@ namespace KirayaDoor.Api.Services
                         .Include(te => te.PaidExpenses)
                         .Include(te => te.ExpenseType)
                         .Include(te => te.ExpenseCycle)
+                        .AsNoTracking()
                         .ToListAsync();
 
                     foreach (var expense in tenantExpenses)
