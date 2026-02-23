@@ -208,14 +208,15 @@ export default function LocationPickerModal({ navigation, route }) {
       return;
     }
 
-    // Pass the selected location data back using setParams before going back
-    navigation.setParams({
+    // Get the original route params to preserve them
+    const originalParams = route.params?.originalRoute || {};
+
+    // Navigate back to PropertyDetails with the selected location data and original params
+    navigation.navigate('PropertyDetails', {
+      ...originalParams,
       selectedAddress: selectedAddress,
       selectedCoordinates: selectedCoordinates,
     });
-    
-    // Navigate back to PropertyDetails
-    navigation.goBack();
   };
 
   const mapHTML = `

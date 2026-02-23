@@ -31,6 +31,15 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(u => u.UserTypeId)
             .IsRequired();
 
+        // Configure decimal properties with precision and scale
+        modelBuilder.Entity<Entities.PaidExpense>()
+            .Property(p => p.PaymentAmount)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Entities.TenantExpense>()
+            .Property(t => t.TenantExpenseAmount)
+            .HasPrecision(18, 2);
+
         // Seed ExpenseTypes
         modelBuilder.Entity<Entities.ExpenseType>().HasData(
             new Entities.ExpenseType { ExpenseTypeId = 1, ExpenseTypeName = "Rent" },

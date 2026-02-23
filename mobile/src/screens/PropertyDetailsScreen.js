@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { propertyApi } from '../api/propertyApi';
@@ -34,25 +33,13 @@ export default function PropertyDetailsScreen({ navigation, route }) {
   const [loading, setLoading] = useState(false);
 
   // Listen for location result when returning from LocationPicker
-  useFocusEffect(
-    useCallback(() => {
-      const unsubscribe = navigation.addListener('focus', () => {
-        // Check if there's location data in the current route params
-        if (route.params?.selectedAddress && route.params?.selectedCoordinates) {
-          setAddressText(route.params.selectedAddress);
-          const { latitude, longitude } = route.params.selectedCoordinates;
-          setGpsLocation(`${latitude},${longitude}`);
-          
-          // Clear the params after using them
-          navigation.setParams({
-            selectedAddress: undefined,
-            selectedCoordinates: undefined,
-          });
-        }
-      });
-      return unsubscribe;
-    }, [navigation, route.params?.selectedAddress, route.params?.selectedCoordinates])
-  );
+  useEffect(() => {
+    if (route.params?.selectedAddress && route.params?.selectedCoordinates) {
+      setAddressText(route.params.selectedAddress);
+      const { latitude, longitude } = route.params.selectedCoordinates;
+      setGpsLocation(`${latitude},${longitude}`);
+    }
+  }, [route.params?.selectedAddress, route.params?.selectedCoordinates]);
 
   const isFormValid =
     propertyName.trim().length > 0 &&
@@ -60,7 +47,9 @@ export default function PropertyDetailsScreen({ navigation, route }) {
     (addressText.trim().length > 0 || gpsLocation);
 
   const handleUseLocation = () => {
-    navigation.navigate('LocationPicker');
+    navigation.navigate('LocationPicker', {
+      originalRoute: route.params,
+    });
   };
 
   const handleAddressTextChange = (text) => {
@@ -151,21 +140,15 @@ export default function PropertyDetailsScreen({ navigation, route }) {
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={{
-              flexDirection: 'row',
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: '#e8e5ff',
+              justifyContent: 'center',
               alignItems: 'center',
-              gap: 8,
             }}
           >
-            <Ionicons name="chevron-back" size={24} color="#1e2939" />
-            <Text
-              style={{
-                fontSize: 16,
-                fontWeight: '600',
-                color: '#1e2939',
-              }}
-            >
-              Back
-            </Text>
+            <Ionicons name="chevron-back" size={22} color="#4f39f6" />
           </TouchableOpacity>
         </View>
 
@@ -415,48 +398,38 @@ export default function PropertyDetailsScreen({ navigation, route }) {
               </TouchableOpacity>
 
               {/* Continue Button */}
-              <LinearGradient
-                colors={
-                  isFormValid
-                    ? ['#4f39f6', '#9810fa']
-                    : ['#d1d5db', '#d1d5db']
-                }
+              <TouchableOpacity
+                onPress={handleContinue}
+                disabled={!isFormValid || loading}
                 style={{
+                  backgroundColor: isFormValid ? '#2563eb' : '#d1d5db',
                   borderRadius: 14,
-                  overflow: 'hidden',
+                  paddingVertical: 16,
+                  paddingHorizontal: 20,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
                   marginTop: 12,
                 }}
               >
-                <TouchableOpacity
-                  onPress={handleContinue}
-                  disabled={!isFormValid || loading}
+                <Text
                   style={{
-                    paddingVertical: 16,
-                    paddingHorizontal: 20,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
+                    fontSize: 16,
+                    fontWeight: 'bold',
+                    color: isFormValid ? 'white' : '#999',
                   }}
                 >
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 'bold',
-                      color: isFormValid ? 'white' : '#999',
-                    }}
-                  >
-                    {loading ? 'Processing...' : 'Continue'}
-                  </Text>
-                  {!loading && (
-                    <Ionicons
-                      name="arrow-forward"
-                      size={20}
-                      color={isFormValid ? 'white' : '#999'}
-                    />
-                  )}
-                </TouchableOpacity>
-              </LinearGradient>
+                  {loading ? 'Processing...' : 'Continue'}
+                </Text>
+                {!loading && (
+                  <Ionicons
+                    name="arrow-forward"
+                    size={20}
+                    color={isFormValid ? 'white' : '#999'}
+                  />
+                )}
+              </TouchableOpacity>
             </View>
           </View>
         </ScrollView>
