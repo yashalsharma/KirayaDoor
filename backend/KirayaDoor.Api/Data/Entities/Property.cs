@@ -13,9 +13,6 @@ namespace KirayaDoor.Api.Data.Entities
         public string PropertyName { get; set; } = string.Empty;
 
         [Required]
-        public int UnitCount { get; set; }
-
-        [Required]
         public int OwnerId { get; set; }
 
         [Required]

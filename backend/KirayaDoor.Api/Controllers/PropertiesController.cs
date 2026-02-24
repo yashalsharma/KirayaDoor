@@ -33,7 +33,7 @@ namespace KirayaDoor.Api.Controllers
                 {
                     PropertyId = p.PropertyId,
                     PropertyName = p.PropertyName,
-                    UnitCount = p.UnitCount,
+                    UnitCount = p.Units?.Count ?? 0,
                     OwnerId = p.OwnerId,
                     Address = p.Address != null ? new AddressDto
                     {
@@ -71,7 +71,7 @@ namespace KirayaDoor.Api.Controllers
                 {
                     PropertyId = property.PropertyId,
                     PropertyName = property.PropertyName,
-                    UnitCount = property.UnitCount,
+                    UnitCount = property.Units?.Count ?? 0,
                     OwnerId = property.OwnerId,
                     Address = property.Address != null ? new AddressDto
                     {
@@ -266,26 +266,30 @@ namespace KirayaDoor.Api.Controllers
                     return NotFound(new { error = "Unit not found" });
                 }
 
-                // Delete all related data
-                foreach (var tenant in unit.Tenants ?? new List<Tenant>())
+                // Delete all related data in cascade order
+                if (unit.Tenants != null && unit.Tenants.Any())
                 {
-                    // Delete tenant expenses
-                    if (tenant.TenantExpenses != null)
+                    foreach (var tenant in unit.Tenants)
                     {
-                        _context.TenantExpenses.RemoveRange(tenant.TenantExpenses);
+                        // Delete all paid expenses for this tenant
+                        // (includes both those linked to TenantExpenses and manual payments)
+                        if (tenant.PaidExpenses != null && tenant.PaidExpenses.Any())
+                        {
+                            _context.PaidExpenses.RemoveRange(tenant.PaidExpenses);
+                        }
+
+                        // Delete all tenant expenses for this tenant
+                        if (tenant.TenantExpenses != null && tenant.TenantExpenses.Any())
+                        {
+                            _context.TenantExpenses.RemoveRange(tenant.TenantExpenses);
+                        }
                     }
 
-                    // Delete paid expenses
-                    if (tenant.PaidExpenses != null)
-                    {
-                        _context.PaidExpenses.RemoveRange(tenant.PaidExpenses);
-                    }
+                    // Delete all tenants in this unit
+                    _context.Tenants.RemoveRange(unit.Tenants);
                 }
 
-                // Delete tenants
-                _context.Tenants.RemoveRange(unit.Tenants ?? new List<Tenant>());
-
-                // Delete unit
+                // Delete the unit itself
                 _context.Units.Remove(unit);
 
                 await _context.SaveChangesAsync();
@@ -390,13 +394,40 @@ namespace KirayaDoor.Api.Controllers
                     return BadRequest(new { error = "Invalid expense cycle" });
                 }
 
+                // Parse date strings to DateTime objects (IST, no timezone conversion)
+                if (!DateTime.TryParseExact(request.TenantExpenseStartDate, "yyyy-MM-dd", 
+                    System.Globalization.CultureInfo.InvariantCulture, 
+                    System.Globalization.DateTimeStyles.None, out var startDate))
+                {
+                    return BadRequest(new { error = "Invalid start date format. Use YYYY-MM-DD" });
+                }
+
+                DateTime? endDate = null;
+                if (!string.IsNullOrEmpty(request.TenantExpenseEndDate))
+                {
+                    if (!DateTime.TryParseExact(request.TenantExpenseEndDate, "yyyy-MM-dd",
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.None, out var parsedEndDate))
+                    {
+                        return BadRequest(new { error = "Invalid end date format. Use YYYY-MM-DD" });
+                    }
+                    endDate = parsedEndDate;
+                }
+
+                // For OneTime cycles, automatically set end date to start date
+                DateTime? finalEndDate = endDate;
+                if (expenseCycle.ExpenseCycleName.ToLower() == "onetime")
+                {
+                    finalEndDate = startDate;
+                }
+
                 var tenantExpense = new TenantExpense
                 {
                     TenantId = tenantId,
                     TenantExpenseTypeId = request.TenantExpenseTypeId,
                     TenantExpenseCycleId = request.TenantExpenseCycleId,
-                    TenantExpenseStartDate = request.TenantExpenseStartDate,
-                    TenantExpenseEndDate = request.TenantExpenseEndDate,
+                    TenantExpenseStartDate = startDate,
+                    TenantExpenseEndDate = finalEndDate,
                     TenantExpenseAmount = request.TenantExpenseAmount,
                     Comments = request.Comments
                 };
@@ -546,7 +577,6 @@ namespace KirayaDoor.Api.Controllers
                 var property = new Property
                 {
                     PropertyName = request.PropertyName,
-                    UnitCount = request.UnitCount,
                     OwnerId = request.OwnerId,
                     AddressId = address?.AddressId ?? 0
                 };
@@ -572,7 +602,7 @@ namespace KirayaDoor.Api.Controllers
                 {
                     PropertyId = property.PropertyId,
                     PropertyName = property.PropertyName,
-                    UnitCount = property.UnitCount,
+                    UnitCount = request.UnitCount,
                     OwnerId = property.OwnerId,
                     Address = address != null ? new AddressDto
                     {
@@ -797,8 +827,8 @@ namespace KirayaDoor.Api.Controllers
     {
         public int TenantExpenseTypeId { get; set; }
         public int TenantExpenseCycleId { get; set; }
-        public DateTime TenantExpenseStartDate { get; set; }
-        public DateTime? TenantExpenseEndDate { get; set; }
+        public required string TenantExpenseStartDate { get; set; } // ISO date string YYYY-MM-DD
+        public string? TenantExpenseEndDate { get; set; } // ISO date string YYYY-MM-DD
         public decimal TenantExpenseAmount { get; set; }
         public string? Comments { get; set; }
     }

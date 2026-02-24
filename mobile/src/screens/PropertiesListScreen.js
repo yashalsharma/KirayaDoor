@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 import { propertyApi } from '../api/propertyApi';
 import ConfirmDialog from '../components/ConfirmDialog';
 import BottomNavigationFooter from '../components/BottomNavigationFooter';
@@ -401,11 +400,10 @@ export default function PropertiesListScreen({ navigation, route }) {
     }
   }, [userId]);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchProperties();
-    }, [fetchProperties])
-  );
+  // Fetch properties once on component mount
+  useEffect(() => {
+    fetchProperties();
+  }, [fetchProperties]);
 
   const onRefresh = useCallback(async () => {
     if (!userId) {

@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import DatePicker from 'react-native-date-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { propertyApi } from '../api/propertyApi';
 
 export default function AddTenantScreen({ navigation, route }) {
@@ -34,6 +34,7 @@ export default function AddTenantScreen({ navigation, route }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [loadingReferenceData, setLoadingReferenceData] = useState(false);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   
   // Picker State
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -44,6 +45,7 @@ export default function AddTenantScreen({ navigation, route }) {
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState(null); // 'start' or 'end'
   const [datePickerValue, setDatePickerValue] = useState(new Date());
+  const [originalDateValue, setOriginalDateValue] = useState(new Date());
 
   // Fetch reference data when moving to step 2
   const fetchReferenceData = useCallback(async () => {
@@ -94,18 +96,11 @@ export default function AddTenantScreen({ navigation, route }) {
       if (expenses.length > 0) {
         for (const expense of expenses) {
           try {
-            // Format dates to ISO date string (YYYY-MM-DD at UTC)
-            const formatDateToUTC = (date) => {
-              if (!date) return null;
-              const d = date instanceof Date ? date : new Date(date);
-              return d.toISOString().split('T')[0]; // Returns YYYY-MM-DD
-            };
-
             await propertyApi.createTenantExpense(newTenant.tenantId, {
               tenantExpenseTypeId: expense.typeId,
               tenantExpenseCycleId: expense.cycleId,
-              tenantExpenseStartDate: formatDateToUTC(expense.startDate),
-              tenantExpenseEndDate: formatDateToUTC(expense.endDate),
+              tenantExpenseStartDate: formatDateToLocalString(expense.startDate),
+              tenantExpenseEndDate: formatDateToLocalString(expense.endDate),
               tenantExpenseAmount: parseFloat(expense.amount),
               comments: expense.comments || null,
             });
@@ -116,13 +111,17 @@ export default function AddTenantScreen({ navigation, route }) {
         }
       }
 
-      Alert.alert('Success', 'Tenant created successfully');
-      navigation.goBack();
+      setShowSuccessDialog(true);
     } catch (error) {
       Alert.alert('Error', error.message || 'Failed to create tenant');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSuccessDialogClose = () => {
+    setShowSuccessDialog(false);
+    navigation.goBack();
   };
 
   const addExpense = () => {
@@ -182,10 +181,14 @@ export default function AddTenantScreen({ navigation, route }) {
 
   const openStartDatePicker = (expenseId) => {
     const expense = expenses.find(e => e.id === expenseId);
-    const initialDate = expense?.startDate instanceof Date
-      ? new Date(expense.startDate)
+    // Get the date - if it's already a Date object, use it directly; otherwise create new Date
+    const initialDate = expense?.startDate 
+      ? (expense.startDate instanceof Date 
+          ? new Date(expense.startDate.getFullYear(), expense.startDate.getMonth(), expense.startDate.getDate())
+          : new Date(expense.startDate))
       : new Date();
     setDatePickerValue(initialDate);
+    setOriginalDateValue(new Date(initialDate.getFullYear(), initialDate.getMonth(), initialDate.getDate()));
     setSelectedExpenseId(expenseId);
     setDatePickerMode('start');
     setDatePickerVisible(true);
@@ -193,10 +196,14 @@ export default function AddTenantScreen({ navigation, route }) {
 
   const openEndDatePicker = (expenseId) => {
     const expense = expenses.find(e => e.id === expenseId);
-    const initialDate = expense?.endDate instanceof Date
-      ? new Date(expense.endDate)
+    // Get the date - if it's already a Date object, use it directly; otherwise create new Date
+    const initialDate = expense?.endDate 
+      ? (expense.endDate instanceof Date 
+          ? new Date(expense.endDate.getFullYear(), expense.endDate.getMonth(), expense.endDate.getDate())
+          : new Date(expense.endDate))
       : new Date();
     setDatePickerValue(initialDate);
+    setOriginalDateValue(new Date(initialDate.getFullYear(), initialDate.getMonth(), initialDate.getDate()));
     setSelectedExpenseId(expenseId);
     setDatePickerMode('end');
     setDatePickerVisible(true);
@@ -208,19 +215,55 @@ export default function AddTenantScreen({ navigation, route }) {
     setSelectedExpenseId(null);
   };
 
-  const handleDateSelect = (date) => {
-    if (datePickerMode === 'start') {
-      updateExpense(selectedExpenseId, 'startDate', date);
-    } else if (datePickerMode === 'end') {
-      updateExpense(selectedExpenseId, 'endDate', date);
+  const handleDatePickerChange = (event, selectedDate) => {
+    // Normalize the date to local timezone to avoid timezone shifts
+    if (selectedDate) {
+      // Create a new date at midnight local time for the selected date
+      const adjustedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+      setDatePickerValue(adjustedDate);
     }
+  };
+
+  const handleDatePickerConfirm = () => {
+    // Apply the selected date to the expense with proper normalization
+    const normalizedDate = new Date(datePickerValue.getFullYear(), datePickerValue.getMonth(), datePickerValue.getDate());
+    if (datePickerMode === 'start') {
+      updateExpense(selectedExpenseId, 'startDate', normalizedDate);
+    } else if (datePickerMode === 'end') {
+      updateExpense(selectedExpenseId, 'endDate', normalizedDate);
+    }
+    closeDatePicker();
+  };
+
+  const handleDatePickerCancel = () => {
+    // Revert to original date
+    setDatePickerValue(originalDateValue);
     closeDatePicker();
   };
 
   const formatDateForDisplay = (date) => {
     if (!date) return 'Not set';
     const d = date instanceof Date ? date : new Date(date);
-    return d.toISOString().split('T')[0];
+    // Use local date components, not UTC
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatDateToLocalString = (date) => {
+    if (!date) return null;
+    const d = date instanceof Date ? date : new Date(date);
+    // Use local date components, not UTC (no timezone conversion)
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const isOneTimeCycle = (cycleId) => {
+    const cycle = expenseCycles.find(c => c.expenseCycleId === cycleId);
+    return cycle && cycle.expenseCycleName.toLowerCase() === 'onetime';
   };
 
   if (currentStep === 1) {
@@ -740,45 +783,80 @@ export default function AddTenantScreen({ navigation, route }) {
                         </TouchableOpacity>
                       </View>
 
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: '#6b7280',
-                            marginBottom: 4,
-                          }}
-                        >
-                          End Date (Optional)
-                        </Text>
-                        <TouchableOpacity
-                          onPress={() => openEndDatePicker(expense.id)}
-                          style={{
-                            backgroundColor: '#f9fafb',
-                            borderRadius: 8,
-                            paddingHorizontal: 12,
-                            paddingVertical: 10,
-                            borderWidth: 1,
-                            borderColor: expense.endDate ? '#e5e7eb' : '#f0f0f0',
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
+                      {!isOneTimeCycle(expense.cycleId) && (
+                        <View style={{ flex: 1 }}>
                           <Text
                             style={{
-                              fontSize: 12,
-                              color: expense.endDate ? '#1e2939' : '#d1d5db',
+                              fontSize: 11,
+                              color: '#6b7280',
+                              marginBottom: 4,
                             }}
                           >
-                            {formatDateForDisplay(expense.endDate)}
+                            End Date (Optional)
                           </Text>
-                          <Ionicons
-                            name="calendar"
-                            size={16}
-                            color={expense.endDate ? '#4f39f6' : '#d1d5db'}
-                          />
-                        </TouchableOpacity>
-                      </View>
+                          <TouchableOpacity
+                            onPress={() => openEndDatePicker(expense.id)}
+                            style={{
+                              backgroundColor: '#f9fafb',
+                              borderRadius: 8,
+                              paddingHorizontal: 12,
+                              paddingVertical: 10,
+                              borderWidth: 1,
+                              borderColor: expense.endDate ? '#e5e7eb' : '#f0f0f0',
+                              flexDirection: 'row',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: expense.endDate ? '#1e2939' : '#d1d5db',
+                              }}
+                            >
+                              {formatDateForDisplay(expense.endDate)}
+                            </Text>
+                            <Ionicons
+                              name="calendar"
+                              size={16}
+                              color={expense.endDate ? '#4f39f6' : '#d1d5db'}
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                      {isOneTimeCycle(expense.cycleId) && (
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              color: '#d1d5db',
+                              marginBottom: 4,
+                            }}
+                          >
+                            End Date (N/A)
+                          </Text>
+                          <View
+                            style={{
+                              backgroundColor: '#f3f4f6',
+                              borderRadius: 8,
+                              paddingHorizontal: 12,
+                              paddingVertical: 10,
+                              borderWidth: 1,
+                              borderColor: '#e5e7eb',
+                              opacity: 0.6,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: '#9ca3af',
+                              }}
+                            >
+                              Not applicable
+                            </Text>
+                          </View>
+                        </View>
+                      )}
                     </View>
                   </View>
                 ))}
@@ -1006,13 +1084,13 @@ export default function AddTenantScreen({ navigation, route }) {
         </View>
       </Modal>
 
-      {/* Date Picker Modal */}
+      {/* Date Picker Modal with Done/Cancel Buttons */}
       {datePickerVisible && (
         <Modal
           visible={datePickerVisible}
           transparent
           animationType="slide"
-          onRequestClose={closeDatePicker}
+          onRequestClose={handleDatePickerCancel}
         >
           <View
             style={{
@@ -1033,7 +1111,7 @@ export default function AddTenantScreen({ navigation, route }) {
               <View
                 style={{
                   paddingHorizontal: 16,
-                  paddingVertical: 16,
+                  paddingVertical: 12,
                   borderBottomWidth: 1,
                   borderBottomColor: '#e5e7eb',
                   flexDirection: 'row',
@@ -1050,18 +1128,21 @@ export default function AddTenantScreen({ navigation, route }) {
                 >
                   {datePickerMode === 'start' ? 'Select Start Date' : 'Select End Date'}
                 </Text>
-                <TouchableOpacity onPress={closeDatePicker}>
-                  <Ionicons name="close" size={24} color="#9ca3af" />
-                </TouchableOpacity>
               </View>
 
               {/* Date Picker */}
-              <View style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
-                <DatePicker
-                  date={datePickerValue}
-                  onDateChange={setDatePickerValue}
+              <View
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  alignItems: 'center',
+                }}
+              >
+                <DateTimePicker
+                  value={datePickerValue}
                   mode="date"
-                  locale="en"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={handleDatePickerChange}
                   textColor="#1e2939"
                 />
               </View>
@@ -1071,12 +1152,13 @@ export default function AddTenantScreen({ navigation, route }) {
                 style={{
                   paddingHorizontal: 16,
                   paddingVertical: 12,
+                  paddingBottom: insets.bottom + 12,
                   flexDirection: 'row',
                   gap: 12,
                 }}
               >
                 <TouchableOpacity
-                  onPress={closeDatePicker}
+                  onPress={handleDatePickerCancel}
                   style={{
                     flex: 1,
                     paddingVertical: 12,
@@ -1099,7 +1181,7 @@ export default function AddTenantScreen({ navigation, route }) {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  onPress={() => handleDateSelect(datePickerValue)}
+                  onPress={handleDatePickerConfirm}
                   style={{
                     flex: 1,
                     paddingVertical: 12,
@@ -1116,10 +1198,106 @@ export default function AddTenantScreen({ navigation, route }) {
                       color: 'white',
                     }}
                   >
-                    Confirm
+                    Done
                   </Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {/* Success Dialog */}
+      {showSuccessDialog && (
+        <Modal
+          visible={showSuccessDialog}
+          transparent
+          animationType="fade"
+          onRequestClose={handleSuccessDialogClose}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              paddingHorizontal: 16,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: 'white',
+                borderRadius: 20,
+                paddingHorizontal: 24,
+                paddingTop: 32,
+                paddingBottom: 24,
+                alignItems: 'center',
+                width: '100%',
+                maxWidth: 340,
+              }}
+            >
+              {/* Success Icon */}
+              <View
+                style={{
+                  width: 60,
+                  height: 60,
+                  borderRadius: 30,
+                  backgroundColor: '#dcfce7',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  marginBottom: 16,
+                }}
+              >
+                <Ionicons name="checkmark" size={32} color="#22c55e" />
+              </View>
+
+              {/* Title */}
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: '700',
+                  color: '#1e2939',
+                  marginBottom: 8,
+                }}
+              >
+                Tenant Added
+              </Text>
+
+              {/* Message */}
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: '#6b7280',
+                  textAlign: 'center',
+                  marginBottom: 24,
+                  lineHeight: 20,
+                }}
+              >
+                Tenant has been successfully added to the unit.
+              </Text>
+
+              {/* OK Button */}
+              <TouchableOpacity
+                onPress={handleSuccessDialogClose}
+                style={{
+                  width: '100%',
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  backgroundColor: '#4f39f6',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '700',
+                    color: 'white',
+                  }}
+                >
+                  OK
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>

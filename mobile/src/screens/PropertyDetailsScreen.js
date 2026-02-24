@@ -104,7 +104,6 @@ export default function PropertyDetailsScreen({ navigation, route }) {
         // Update existing property
         await propertyApi.updateProperty(propertyId, {
           propertyName: propertyName.trim(),
-          unitCount: parseInt(unitCount),
           addressText: addressText.trim(),
           location: gpsLocation,
         });
