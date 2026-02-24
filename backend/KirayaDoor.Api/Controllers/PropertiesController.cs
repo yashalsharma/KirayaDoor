@@ -105,6 +105,22 @@ namespace KirayaDoor.Api.Controllers
             }
         }
 
+        // GET: api/tenants/{tenantId}/pending-amount
+        [HttpGet("tenants/{tenantId}/pending-amount")]
+        public async Task<ActionResult<PendingAmountDto>> GetTenantPendingAmount(int tenantId)
+        {
+            try
+            {
+                var pendingAmountService = HttpContext.RequestServices.GetRequiredService<PendingAmountService>();
+                var pendingAmount = await pendingAmountService.CalculateTenantPendingAmountAsync(tenantId);
+                return Ok(new PendingAmountDto { PendingAmount = pendingAmount });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         // GET: api/properties/{id}/units
         [HttpGet("{id}/units")]
         public async Task<ActionResult<IEnumerable<UnitDto>>> GetUnitsWithTenants(int id)
@@ -145,6 +161,85 @@ namespace KirayaDoor.Api.Controllers
                 }).ToList() ?? new List<UnitDto>();
 
                 return Ok(unitDtos);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // POST: api/properties/{propertyId}/units
+        [HttpPost("{propertyId}/units")]
+        public async Task<ActionResult<UnitDto>> CreateUnit(int propertyId, [FromBody] CreateUnitRequest request)
+        {
+            try
+            {
+                // Verify property exists
+                var property = await _context.Properties.FindAsync(propertyId);
+                if (property == null)
+                {
+                    return NotFound(new { error = "Property not found" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.UnitName))
+                {
+                    return BadRequest(new { error = "Unit name is required" });
+                }
+
+                // Create the unit
+                var unit = new Unit
+                {
+                    UnitName = request.UnitName,
+                    PropertyId = propertyId
+                };
+
+                _context.Units.Add(unit);
+                await _context.SaveChangesAsync();
+
+                var unitDto = new UnitDto
+                {
+                    UnitId = unit.UnitId,
+                    UnitName = unit.UnitName,
+                    PropertyId = unit.PropertyId,
+                    Tenants = new List<TenantDto>()
+                };
+
+                return CreatedAtAction(nameof(GetUnitsWithTenants), new { id = propertyId }, unitDto);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // PUT: api/properties/units/{unitId}
+        [HttpPut("units/{unitId}")]
+        public async Task<IActionResult> UpdateUnit(int unitId, [FromBody] CreateUnitRequest request)
+        {
+            try
+            {
+                var unit = await _context.Units.FindAsync(unitId);
+                if (unit == null)
+                {
+                    return NotFound(new { error = "Unit not found" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.UnitName))
+                {
+                    return BadRequest(new { error = "Unit name is required" });
+                }
+
+                unit.UnitName = request.UnitName;
+                _context.Units.Update(unit);
+                await _context.SaveChangesAsync();
+
+                return Ok(new UnitDto
+                {
+                    UnitId = unit.UnitId,
+                    UnitName = unit.UnitName,
+                    PropertyId = unit.PropertyId,
+                    Tenants = new List<TenantDto>()
+                });
             }
             catch (Exception ex)
             {
@@ -448,6 +543,11 @@ namespace KirayaDoor.Api.Controllers
         public string? PropertyName { get; set; }
         public string? AddressText { get; set; }
         public string? Location { get; set; }
+    }
+
+    public class CreateUnitRequest
+    {
+        public string UnitName { get; set; } = string.Empty;
     }
 
     public class UnitDto

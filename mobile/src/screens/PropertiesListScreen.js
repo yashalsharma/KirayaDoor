@@ -10,12 +10,14 @@ import {
   Animated,
   Easing,
   PanResponder,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { propertyApi } from '../api/propertyApi';
 import ConfirmDialog from '../components/ConfirmDialog';
+import BottomNavigationFooter from '../components/BottomNavigationFooter';
 
 const { width } = Dimensions.get('window');
 const ACTION_BUTTONS_WIDTH = 80; // Width of hidden action buttons (vertical layout)
@@ -367,7 +369,7 @@ function SwipeablePropertyCard({
 }
 
 export default function PropertiesListScreen({ navigation, route }) {
-  const { userName, userId } = route.params;
+  const { userName, userId } = route?.params || {};
   const scrollTimeoutRef = useRef(null);
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -376,25 +378,41 @@ export default function PropertiesListScreen({ navigation, route }) {
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [propertyToDelete, setPropertyToDelete] = useState(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchProperties();
-    }, [])
-  );
+  // Log route params changes
+  useEffect(() => {
+    console.log('PropertiesListScreen route.params updated:', route?.params);
+  }, [route?.params]);
 
-  const fetchProperties = async () => {
+  const fetchProperties = useCallback(async () => {
+    if (!userId) {
+      console.warn('userId is not available. route.params:', route?.params);
+      return;
+    }
+    console.log('Fetching properties for userId:', userId);
     try {
       setLoading(true);
       const response = await propertyApi.getPropertiesByOwner(userId);
       setProperties(response || []);
     } catch (error) {
+      console.error('Detailed error info:', error);
       Alert.alert('Error', error.message || 'Failed to fetch properties');
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProperties();
+    }, [fetchProperties])
+  );
 
   const onRefresh = useCallback(async () => {
+    if (!userId) {
+      console.warn('Cannot refresh: userId is not available');
+      setRefreshing(false);
+      return;
+    }
     setRefreshing(true);
     try {
       const response = await propertyApi.getPropertiesByOwner(userId);
@@ -442,6 +460,8 @@ export default function PropertiesListScreen({ navigation, route }) {
         navigation.navigate('Units', {
           propertyId,
           propertyName,
+          userId,
+          userName,
         })
       }
       isCardSwiping={isCardSwiping}
@@ -591,6 +611,18 @@ export default function PropertiesListScreen({ navigation, route }) {
           scrollEnabled={!isCardSwiping}
         />
       </View>
+
+      {/* Bottom Navigation Footer */}
+      <BottomNavigationFooter
+        activeTab="Property"
+        onTabPress={(tab) => {
+          if (tab === 'Analytics') {
+            // Handle analytics
+          } else if (tab === 'More') {
+            // Handle more options
+          }
+        }}
+      />
 
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog

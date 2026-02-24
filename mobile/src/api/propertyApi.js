@@ -113,6 +113,44 @@ export const propertyApi = {
     }
   },
 
+  // Get pending amount due for a specific tenant
+  getTenantPendingAmount: async (tenantId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/pending-amount`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to fetch tenant pending amount';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data.pendingAmount || 0;
+      } else {
+        return 0;
+      }
+    } catch (error) {
+      console.error('Error fetching tenant pending amount:', error);
+      return 0;
+    }
+  },
+
   // Get units with tenants for a property
   getUnits: async (propertyId) => {
     try {
@@ -147,6 +185,88 @@ export const propertyApi = {
       }
     } catch (error) {
       console.error('Error fetching units:', error);
+      throw error;
+    }
+  },
+
+  // Create a new unit for a property
+  createUnit: async (propertyId, unitData) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/${propertyId}/units`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            unitName: unitData.unitName,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to create unit';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        return { unitId: null, unitName: unitData.unitName };
+      }
+    } catch (error) {
+      console.error('Error creating unit:', error);
+      throw error;
+    }
+  },
+
+  // Update unit name
+  updateUnit: async (unitId, unitData) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/units/${unitId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            unitName: unitData.unitName,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to update unit';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        return { unitId, unitName: unitData.unitName };
+      }
+    } catch (error) {
+      console.error('Error updating unit:', error);
       throw error;
     }
   },
@@ -292,6 +412,114 @@ export const propertyApi = {
       return { success: true };
     } catch (error) {
       console.error('Error deleting unit:', error);
+      throw error;
+    }
+  },
+
+  // Get tenants for a property
+  getTenants: async (propertyId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/${propertyId}/tenants`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to fetch tenants';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching tenants:', error);
+      throw error;
+    }
+  },
+
+  // Get all tenants for a user (across all properties)
+  getAllTenants: async (userId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/tenants/user/${userId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to fetch tenants';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching all tenants:', error);
+      throw error;
+    }
+  },
+
+  // Delete a tenant
+  deleteTenant: async (propertyId, tenantId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/${propertyId}/tenants/${tenantId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to delete tenant';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting tenant:', error);
       throw error;
     }
   },
