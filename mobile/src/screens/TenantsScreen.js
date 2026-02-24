@@ -441,7 +441,7 @@ export default function TenantsScreen({ navigation, route }) {
     if (!tenantToDelete) return;
     
     try {
-      await propertyApi.deleteTenant(tenantToDelete);
+      await propertyApi.deleteTenant(propertyId, tenantToDelete);
       setTenants(tenants.filter(t => t.tenantId !== tenantToDelete));
       setDeleteDialogVisible(false);
       setTenantToDelete(null);

@@ -455,6 +455,52 @@ namespace KirayaDoor.Api.Controllers
             }
         }
 
+        // DELETE: api/properties/{propertyId}/tenants/{tenantId}
+        [HttpDelete("{propertyId}/tenants/{tenantId}")]
+#pragma warning disable CS8620
+        public async Task<IActionResult> DeleteTenant(int propertyId, int tenantId)
+        {
+            try
+            {
+                // Step 1: Delete all paid expenses against this tenant (regardless of TenantExpense link)
+                var allPaidExpenses = await _context.PaidExpenses
+                    .Where(pe => pe.TenantId == tenantId)
+                    .ToListAsync();
+                
+                if (allPaidExpenses.Any())
+                {
+                    _context.PaidExpenses.RemoveRange(allPaidExpenses);
+                    await _context.SaveChangesAsync();
+                }
+
+                // Step 2: Delete all tenant expenses for this tenant
+                var allTenantExpenses = await _context.TenantExpenses
+                    .Where(te => te.TenantId == tenantId)
+                    .ToListAsync();
+                
+                if (allTenantExpenses.Any())
+                {
+                    _context.TenantExpenses.RemoveRange(allTenantExpenses);
+                    await _context.SaveChangesAsync();
+                }
+
+                // Step 3: Delete the tenant itself
+                var tenant = await _context.Tenants.FindAsync(tenantId);
+                if (tenant != null)
+                {
+                    _context.Tenants.Remove(tenant);
+                    await _context.SaveChangesAsync();
+                }
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+#pragma warning restore CS8620
+
         // DELETE: api/tenants/{tenantId}/expenses/{tenantExpenseId}
         [HttpDelete("tenants/{tenantId}/expenses/{tenantExpenseId}")]
         public async Task<IActionResult> DeleteTenantExpense(int tenantId, int tenantExpenseId)
