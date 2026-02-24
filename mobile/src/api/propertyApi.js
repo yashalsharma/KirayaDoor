@@ -523,4 +523,193 @@ export const propertyApi = {
       throw error;
     }
   },
+
+  // Create a new tenant
+  createTenant: async (unitId, { tenantName, tenantContactNumber }) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/units/${unitId}/tenants`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            tenantName,
+            tenantContactNumber,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to create tenant';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error creating tenant:', error);
+      throw error;
+    }
+  },
+
+  // Create a tenant expense
+  createTenantExpense: async (tenantId, expenseData) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/expenses`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(expenseData),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to create tenant expense';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error creating tenant expense:', error);
+      throw error;
+    }
+  },
+
+  // Delete a tenant expense
+  deleteTenantExpense: async (tenantId, tenantExpenseId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/expenses/${tenantExpenseId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to delete tenant expense';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('Error deleting tenant expense:', error);
+      throw error;
+    }
+  },
+
+  // Get expense types
+  getExpenseTypes: async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/expense-types`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to fetch expense types';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching expense types:', error);
+      throw error;
+    }
+  },
+
+  // Get expense cycles
+  getExpenseCycles: async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/expense-cycles`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to fetch expense cycles';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching expense cycles:', error);
+      throw error;
+    }
+  },
 };

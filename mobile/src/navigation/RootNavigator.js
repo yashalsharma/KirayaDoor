@@ -9,6 +9,7 @@ import PropertiesListScreen from '../screens/PropertiesListScreen';
 import PropertyDetailsScreen from '../screens/PropertyDetailsScreen';
 import UnitsScreen from '../screens/UnitsScreen';
 import TenantsScreen from '../screens/TenantsScreen';
+import AddTenantScreen from '../screens/AddTenantScreen';
 import LocationPickerModal from '../screens/LocationPickerModal';
 
 const Stack = createNativeStackNavigator();
@@ -60,6 +61,11 @@ export default function RootNavigator() {
           name="Tenants"
           component={TenantsScreen}
           options={{ title: 'Tenants' }}
+        />
+        <Stack.Screen
+          name="AddTenant"
+          component={AddTenantScreen}
+          options={{ title: 'Add Tenant' }}
         />
         <Stack.Screen
           name="LocationPicker"

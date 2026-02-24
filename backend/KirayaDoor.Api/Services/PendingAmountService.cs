@@ -14,7 +14,7 @@ namespace KirayaDoor.Api.Services
         }
 
         /// <summary>
-        /// Calculates the number of cycles due for a tenant expense based on:
+        /// Calculates the number of complete cycles due for a tenant expense based on:
         /// - TenantExpenseStartDate (date when first payment becomes due - advance payment)
         /// - TenantExpenseEndDate (if set)
         /// - TenantExpenseCycleId
@@ -22,7 +22,7 @@ namespace KirayaDoor.Api.Services
         /// 
         /// The start date counts as the first cycle (payment due immediately).
         /// Additional cycles are counted based on the cycle type.
-        /// Only complete cycles are counted. No pro-rata amounts.
+        /// Only complete cycles are counted. 
         /// </summary>
         private int CalculateCyclesDue(TenantExpense expense, DateTime asOfDate)
         {
@@ -103,7 +103,119 @@ namespace KirayaDoor.Api.Services
         }
 
         /// <summary>
+        /// Calculates the pro-rata amount for partial cycle at the end of the expense period.
+        /// This applies when the expense ends before a complete cycle would occur.
+        /// </summary>
+        private decimal CalculateProRataAmount(TenantExpense expense, DateTime asOfDate)
+        {
+            // Get the cycle from database
+            var cycle = _context.ExpenseCycles.FirstOrDefault(c => c.ExpenseCycleId == expense.TenantExpenseCycleId);
+            if (cycle == null) return 0;
+
+            // If expense hasn't started yet, no pro-rata
+            if (expense.TenantExpenseStartDate > asOfDate)
+                return 0;
+
+            // If no end date is set, expense is still ongoing - no pro-rata yet
+            if (!expense.TenantExpenseEndDate.HasValue)
+                return 0;
+
+            var endDate = expense.TenantExpenseEndDate.Value;
+
+            // If end date is in the future, no pro-rata calculation needed yet
+            if (endDate > asOfDate)
+                return 0;
+
+            var startDate = expense.TenantExpenseStartDate;
+
+            // Find where the last complete cycle ends
+            DateTime lastCycleDate = startDate;
+
+            switch (cycle.ExpenseCycleName.ToLower())
+            {
+                case "onetime":
+                    // One-time expenses don't have pro-rata
+                    return 0;
+
+                case "month":
+                    // Find the last complete month
+                    var monthlyDate = startDate.AddMonths(1);
+                    while (monthlyDate <= endDate)
+                    {
+                        lastCycleDate = monthlyDate;
+                        monthlyDate = monthlyDate.AddMonths(1);
+                    }
+                    // If there are days remaining after the last cycle
+                    if (endDate > lastCycleDate)
+                    {
+                        int daysElapsed = (endDate - lastCycleDate).Days;
+                        int daysInMonth = DateTime.DaysInMonth(endDate.Year, endDate.Month);
+                        decimal proRataRatio = (decimal)daysElapsed / daysInMonth;
+                        return expense.TenantExpenseAmount * proRataRatio;
+                    }
+                    return 0;
+
+                case "quarter":
+                    // Find the last complete quarter
+                    var quarterDate = startDate.AddMonths(3);
+                    while (quarterDate <= endDate)
+                    {
+                        lastCycleDate = quarterDate;
+                        quarterDate = quarterDate.AddMonths(3);
+                    }
+                    // If there are days remaining after the last cycle
+                    if (endDate > lastCycleDate)
+                    {
+                        int daysElapsed = (endDate - lastCycleDate).Days;
+                        int daysInQuarter = 92; // Average, but could be 90-92 depending on months
+                        decimal proRataRatio = (decimal)daysElapsed / daysInQuarter;
+                        return expense.TenantExpenseAmount * proRataRatio;
+                    }
+                    return 0;
+
+                case "halfyear":
+                    // Find the last complete half-year
+                    var halfYearDate = startDate.AddMonths(6);
+                    while (halfYearDate <= endDate)
+                    {
+                        lastCycleDate = halfYearDate;
+                        halfYearDate = halfYearDate.AddMonths(6);
+                    }
+                    // If there are days remaining after the last cycle
+                    if (endDate > lastCycleDate)
+                    {
+                        int daysElapsed = (endDate - lastCycleDate).Days;
+                        int daysInHalfYear = 183; // Average
+                        decimal proRataRatio = (decimal)daysElapsed / daysInHalfYear;
+                        return expense.TenantExpenseAmount * proRataRatio;
+                    }
+                    return 0;
+
+                case "annual":
+                    // Find the last complete year
+                    var annualDate = startDate.AddYears(1);
+                    while (annualDate <= endDate)
+                    {
+                        lastCycleDate = annualDate;
+                        annualDate = annualDate.AddYears(1);
+                    }
+                    // If there are days remaining after the last cycle
+                    if (endDate > lastCycleDate)
+                    {
+                        int daysElapsed = (endDate - lastCycleDate).Days;
+                        int daysInYear = DateTime.IsLeapYear(endDate.Year) ? 366 : 365;
+                        decimal proRataRatio = (decimal)daysElapsed / daysInYear;
+                        return expense.TenantExpenseAmount * proRataRatio;
+                    }
+                    return 0;
+            }
+
+            return 0;
+        }
+
+        /// <summary>
         /// Calculates the pending amount (due - paid) for a specific TenantExpense
+        /// Includes full cycles plus pro-rata for partial final cycle
         /// </summary>
         public async Task<decimal> CalculateTenantExpensePendingAmountAsync(int tenantExpenseId)
         {
@@ -115,11 +227,14 @@ namespace KirayaDoor.Api.Services
             if (expense == null)
                 return 0;
 
-            // Calculate how many cycles are due
+            // Calculate how many complete cycles are due
             int cyclesDue = CalculateCyclesDue(expense, DateTime.UtcNow);
 
+            // Calculate pro-rata amount for partial cycle
+            decimal proRataAmount = CalculateProRataAmount(expense, DateTime.UtcNow);
+
             // Calculate total expected amount
-            decimal expectedAmount = cyclesDue * expense.TenantExpenseAmount;
+            decimal expectedAmount = (cyclesDue * expense.TenantExpenseAmount) + proRataAmount;
 
             // Sum up all payments made for this expense
             decimal totalPaid = expense.PaidExpenses?.Sum(pe => pe.PaymentAmount) ?? 0;
@@ -130,6 +245,7 @@ namespace KirayaDoor.Api.Services
 
         /// <summary>
         /// Calculates the total pending amount for a specific tenant (all their expenses combined)
+        /// Includes full cycles plus pro-rata for partial final cycles
         /// </summary>
         public async Task<decimal> CalculateTenantPendingAmountAsync(int tenantId)
         {
@@ -144,7 +260,8 @@ namespace KirayaDoor.Api.Services
             foreach (var expense in tenantExpenses)
             {
                 int cyclesDue = CalculateCyclesDue(expense, DateTime.UtcNow);
-                decimal expectedAmount = cyclesDue * expense.TenantExpenseAmount;
+                decimal proRataAmount = CalculateProRataAmount(expense, DateTime.UtcNow);
+                decimal expectedAmount = (cyclesDue * expense.TenantExpenseAmount) + proRataAmount;
                 decimal totalPaid = expense.PaidExpenses?.Sum(pe => pe.PaymentAmount) ?? 0;
                 totalPending += Math.Max(0, expectedAmount - totalPaid);
             }
@@ -242,7 +359,8 @@ namespace KirayaDoor.Api.Services
                     foreach (var expense in tenantExpenses)
                     {
                         int cyclesDue = CalculateCyclesDue(expense, DateTime.UtcNow);
-                        decimal expectedAmount = cyclesDue * expense.TenantExpenseAmount;
+                        decimal proRataAmount = CalculateProRataAmount(expense, DateTime.UtcNow);
+                        decimal expectedAmount = (cyclesDue * expense.TenantExpenseAmount) + proRataAmount;
                         decimal totalPaid = expense.PaidExpenses?.Sum(pe => pe.PaymentAmount) ?? 0;
                         decimal pending = Math.Max(0, expectedAmount - totalPaid);
 
@@ -253,6 +371,7 @@ namespace KirayaDoor.Api.Services
                             CycleName = expense.ExpenseCycle?.ExpenseCycleName ?? "Unknown",
                             CycleAmount = expense.TenantExpenseAmount,
                             CyclesDue = cyclesDue,
+                            ProRataAmount = proRataAmount,
                             ExpectedAmount = expectedAmount,
                             TotalPaid = totalPaid,
                             PendingAmount = pending
@@ -304,6 +423,7 @@ namespace KirayaDoor.Api.Services
         public string CycleName { get; set; } = "";
         public decimal CycleAmount { get; set; }
         public int CyclesDue { get; set; }
+        public decimal ProRataAmount { get; set; }
         public decimal ExpectedAmount { get; set; }
         public decimal TotalPaid { get; set; }
         public decimal PendingAmount { get; set; }

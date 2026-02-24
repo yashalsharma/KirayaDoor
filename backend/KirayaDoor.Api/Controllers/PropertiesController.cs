@@ -299,7 +299,216 @@ namespace KirayaDoor.Api.Controllers
         }
 #pragma warning restore CS8620
 
-        // POST: api/properties
+        // POST: api/properties/units/{unitId}/tenants
+        [HttpPost("units/{unitId}/tenants")]
+        public async Task<ActionResult<TenantDto>> CreateTenant(int unitId, [FromBody] CreateTenantRequest request)
+        {
+            try
+            {
+                // Verify unit exists
+                var unit = await _context.Units.FindAsync(unitId);
+                if (unit == null)
+                {
+                    return NotFound(new { error = "Unit not found" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.TenantName))
+                {
+                    return BadRequest(new { error = "Tenant name is required" });
+                }
+
+                if (string.IsNullOrWhiteSpace(request.TenantContactNumber))
+                {
+                    return BadRequest(new { error = "Tenant contact number is required" });
+                }
+
+                var tenant = new Tenant
+                {
+                    UnitId = unitId,
+                    TenantName = request.TenantName.Trim(),
+                    TenantContactNumber = request.TenantContactNumber.Trim(),
+                    IsActive = true // Always create as active
+                };
+
+                _context.Tenants.Add(tenant);
+                await _context.SaveChangesAsync();
+
+                var tenantDto = new TenantDto
+                {
+                    TenantId = tenant.TenantId,
+                    TenantName = tenant.TenantName,
+                    TenantContactNumber = tenant.TenantContactNumber,
+                    IsActive = tenant.IsActive
+                };
+
+                return CreatedAtAction(nameof(CreateTenant), new { unitId = unitId, tenantId = tenant.TenantId }, tenantDto);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // POST: api/tenants/{tenantId}/expenses
+        [HttpPost("tenants/{tenantId}/expenses")]
+        public async Task<ActionResult<TenantExpenseDto>> CreateTenantExpense(int tenantId, [FromBody] CreateTenantExpenseRequest request)
+        {
+            try
+            {
+                // Verify tenant exists
+                var tenant = await _context.Tenants.FindAsync(tenantId);
+                if (tenant == null)
+                {
+                    return NotFound(new { error = "Tenant not found" });
+                }
+
+                if (request.TenantExpenseAmount <= 0)
+                {
+                    return BadRequest(new { error = "Expense amount must be greater than 0" });
+                }
+
+                if (request.TenantExpenseTypeId <= 0)
+                {
+                    return BadRequest(new { error = "Expense type is required" });
+                }
+
+                if (request.TenantExpenseCycleId <= 0)
+                {
+                    return BadRequest(new { error = "Expense cycle is required" });
+                }
+
+                // Verify expense type and cycle exist
+                var expenseType = await _context.ExpenseTypes.FindAsync(request.TenantExpenseTypeId);
+                if (expenseType == null)
+                {
+                    return BadRequest(new { error = "Invalid expense type" });
+                }
+
+                var expenseCycle = await _context.ExpenseCycles.FindAsync(request.TenantExpenseCycleId);
+                if (expenseCycle == null)
+                {
+                    return BadRequest(new { error = "Invalid expense cycle" });
+                }
+
+                var tenantExpense = new TenantExpense
+                {
+                    TenantId = tenantId,
+                    TenantExpenseTypeId = request.TenantExpenseTypeId,
+                    TenantExpenseCycleId = request.TenantExpenseCycleId,
+                    TenantExpenseStartDate = request.TenantExpenseStartDate,
+                    TenantExpenseEndDate = request.TenantExpenseEndDate,
+                    TenantExpenseAmount = request.TenantExpenseAmount,
+                    Comments = request.Comments
+                };
+
+                _context.TenantExpenses.Add(tenantExpense);
+                await _context.SaveChangesAsync();
+
+                var tenantExpenseDto = new TenantExpenseDto
+                {
+                    TenantExpenseId = tenantExpense.TenantExpenseId,
+                    TenantId = tenantExpense.TenantId,
+                    TenantExpenseTypeId = tenantExpense.TenantExpenseTypeId,
+                    TenantExpenseCycleId = tenantExpense.TenantExpenseCycleId,
+                    TenantExpenseStartDate = tenantExpense.TenantExpenseStartDate,
+                    TenantExpenseEndDate = tenantExpense.TenantExpenseEndDate,
+                    TenantExpenseAmount = tenantExpense.TenantExpenseAmount,
+                    Comments = tenantExpense.Comments
+                };
+
+                return CreatedAtAction(nameof(CreateTenantExpense), new { tenantId = tenantId }, tenantExpenseDto);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // DELETE: api/tenants/{tenantId}/expenses/{tenantExpenseId}
+        [HttpDelete("tenants/{tenantId}/expenses/{tenantExpenseId}")]
+        public async Task<IActionResult> DeleteTenantExpense(int tenantId, int tenantExpenseId)
+        {
+            try
+            {
+                var tenantExpense = await _context.TenantExpenses.FindAsync(tenantExpenseId);
+                if (tenantExpense == null)
+                {
+                    return NotFound(new { error = "Tenant expense not found" });
+                }
+
+                if (tenantExpense.TenantId != tenantId)
+                {
+                    return BadRequest(new { error = "Tenant expense does not belong to this tenant" });
+                }
+
+                // Delete associated paid expenses
+                var paidExpenses = await _context.PaidExpenses
+                    .Where(pe => pe.TenantExpenseId == tenantExpenseId)
+                    .ToListAsync();
+                
+                if (paidExpenses.Any())
+                {
+                    _context.PaidExpenses.RemoveRange(paidExpenses);
+                }
+
+                _context.TenantExpenses.Remove(tenantExpense);
+                await _context.SaveChangesAsync();
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // GET: api/properties/expense-types
+        [HttpGet("expense-types")]
+        public async Task<ActionResult<IEnumerable<ExpenseTypeDto>>> GetExpenseTypes()
+        {
+            try
+            {
+                var expenseTypes = await _context.ExpenseTypes
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                var expenseTypeDtos = expenseTypes.Select(et => new ExpenseTypeDto
+                {
+                    ExpenseTypeId = et.ExpenseTypeId,
+                    ExpenseTypeName = et.ExpenseTypeName
+                }).ToList();
+
+                return Ok(expenseTypeDtos);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // GET: api/properties/expense-cycles
+        [HttpGet("expense-cycles")]
+        public async Task<ActionResult<IEnumerable<ExpenseCycleDto>>> GetExpenseCycles()
+        {
+            try
+            {
+                var expenseCycles = await _context.ExpenseCycles
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                var expenseCycleDtos = expenseCycles.Select(ec => new ExpenseCycleDto
+                {
+                    ExpenseCycleId = ec.ExpenseCycleId,
+                    ExpenseCycleName = ec.ExpenseCycleName
+                }).ToList();
+
+                return Ok(expenseCycleDtos);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
         [HttpPost]
         public async Task<ActionResult<PropertyDto>> CreateProperty([FromBody] CreatePropertyRequest request)
         {
@@ -564,6 +773,46 @@ namespace KirayaDoor.Api.Controllers
         public string TenantName { get; set; } = string.Empty;
         public string TenantContactNumber { get; set; } = string.Empty;
         public bool IsActive { get; set; }
+    }
+
+    public class CreateTenantRequest
+    {
+        public string TenantName { get; set; } = string.Empty;
+        public string TenantContactNumber { get; set; } = string.Empty;
+    }
+
+    public class TenantExpenseDto
+    {
+        public int TenantExpenseId { get; set; }
+        public int TenantId { get; set; }
+        public int TenantExpenseTypeId { get; set; }
+        public int TenantExpenseCycleId { get; set; }
+        public DateTime TenantExpenseStartDate { get; set; }
+        public DateTime? TenantExpenseEndDate { get; set; }
+        public decimal TenantExpenseAmount { get; set; }
+        public string? Comments { get; set; }
+    }
+
+    public class CreateTenantExpenseRequest
+    {
+        public int TenantExpenseTypeId { get; set; }
+        public int TenantExpenseCycleId { get; set; }
+        public DateTime TenantExpenseStartDate { get; set; }
+        public DateTime? TenantExpenseEndDate { get; set; }
+        public decimal TenantExpenseAmount { get; set; }
+        public string? Comments { get; set; }
+    }
+
+    public class ExpenseTypeDto
+    {
+        public int ExpenseTypeId { get; set; }
+        public string ExpenseTypeName { get; set; } = string.Empty;
+    }
+
+    public class ExpenseCycleDto
+    {
+        public int ExpenseCycleId { get; set; }
+        public string ExpenseCycleName { get; set; } = string.Empty;
     }
 
     public class PendingAmountDto

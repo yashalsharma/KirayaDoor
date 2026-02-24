@@ -462,9 +462,12 @@ export default function TenantsScreen({ navigation, route }) {
     Alert.alert('Edit Tenant', `Editing ${tenant.tenantName}`);
   };
 
-  const handleAddTenant = async () => {
-    // TODO: Navigate to add tenant screen
-    Alert.alert('Add Tenant', 'Add tenant feature coming soon');
+  const handleAddTenant = () => {
+    navigation.navigate('AddTenant', {
+      unitId,
+      unitName,
+      propertyId,
+    });
   };
 
   if (loading) {
