@@ -27,7 +27,7 @@ namespace KirayaDoor.Api.Services
             try
             {
                 var tenant = await _context.Tenants
-                    .Where(t => t.TenantId == tenantId && t.IsActive)
+                    .Where(t => t.TenantId == tenantId)
                     .Include(t => t.GovernmentIdType)
                     .FirstOrDefaultAsync();
 

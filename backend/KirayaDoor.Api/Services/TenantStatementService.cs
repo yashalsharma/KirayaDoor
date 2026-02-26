@@ -34,7 +34,7 @@ namespace KirayaDoor.Api.Services
             {
                 // Verify tenant exists
                 var tenant = await _context.Tenants
-                    .Where(t => t.TenantId == tenantId && t.IsActive)
+                    .Where(t => t.TenantId == tenantId)
                     .Include(t => t.GovernmentIdType)
                     .FirstOrDefaultAsync();
 
