@@ -19,11 +19,19 @@ namespace KirayaDoor.Api.Data.Entities
         [MaxLength(15)]
         public string TenantContactNumber { get; set; } = string.Empty;
 
+        [MaxLength(50)]
+        public string? GovernmentId { get; set; }
+
+        public int? GovernmentTypeId { get; set; }
+
         [Required]
         public bool IsActive { get; set; } = true;
 
         [ForeignKey("UnitId")]
         public virtual Unit? Unit { get; set; }
+
+        [ForeignKey("GovernmentTypeId")]
+        public virtual GovernmentIdType? GovernmentIdType { get; set; }
 
         public virtual ICollection<TenantExpense>? TenantExpenses { get; set; }
         public virtual ICollection<PaidExpense>? PaidExpenses { get; set; }

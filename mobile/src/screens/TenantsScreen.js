@@ -54,7 +54,7 @@ function TenantCard({ item, navigation, onDelete, onEdit }) {
             alignItems: 'center',
           }}
         >
-          <Ionicons name="person" size={20} color="#c41e3a" />
+          <Ionicons name="person" size={20} color="#4f39f6" />
         </View>
 
         {/* Tenant Info */}
@@ -69,15 +69,18 @@ function TenantCard({ item, navigation, onDelete, onEdit }) {
           >
             {item.tenantName}
           </Text>
-          <Text
-            style={{
-              fontSize: 12,
-              color: '#9ca3af',
-            }}
-            numberOfLines={1}
-          >
-            {item.tenantContactNumber || 'No contact'}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="call" size={12} color="#9ca3af" />
+            <Text
+              style={{
+                fontSize: 12,
+                color: '#9ca3af',
+              }}
+              numberOfLines={1}
+            >
+              {item.tenantContactNumber || 'No contact'}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -88,7 +91,6 @@ function TenantCard({ item, navigation, onDelete, onEdit }) {
           borderRadius: 12,
           paddingHorizontal: 10,
           paddingVertical: 6,
-          marginHorizontal: 12,
           minWidth: 60,
           justifyContent: 'center',
           alignItems: 'center',
@@ -105,36 +107,6 @@ function TenantCard({ item, navigation, onDelete, onEdit }) {
         </Text>
       </View>
 
-      {/* Right Section: Edit and Delete Buttons */}
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <TouchableOpacity
-          onPress={() => onEdit(item)}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: '#e0e7ff',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <Ionicons name="pencil" size={16} color="#4f46e5" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => onDelete(item.tenantId)}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: '#fee2e2',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <Ionicons name="trash" size={16} color="#dc2626" />
-        </TouchableOpacity>
-      </View>
     </TouchableOpacity>
   );
 }
@@ -561,7 +533,7 @@ export default function TenantsScreen({ navigation, route }) {
               alignItems: 'center',
             }}
           >
-            <Ionicons name="home" size={22} color="#c41e3a" />
+            <Ionicons name="home" size={22} color="#4f39f6" />
           </View>
         </View>
       </Pressable>

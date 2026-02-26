@@ -438,7 +438,7 @@ export default function PropertyDetailsScreen({ navigation, route }) {
                 onPress={handleContinue}
                 disabled={!isFormValid || loading}
                 style={{
-                  backgroundColor: isFormValid ? '#2563eb' : '#d1d5db',
+                  backgroundColor: isFormValid ? '#4f39f6' : '#d1d5db',
                   borderRadius: 14,
                   paddingVertical: 16,
                   paddingHorizontal: 20,

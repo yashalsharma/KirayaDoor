@@ -156,6 +156,8 @@ namespace KirayaDoor.Api.Controllers
                         TenantId = t.TenantId,
                         TenantName = t.TenantName,
                         TenantContactNumber = t.TenantContactNumber,
+                        GovernmentId = t.GovernmentId,
+                        GovernmentTypeId = t.GovernmentTypeId,
                         IsActive = t.IsActive
                     }).ToList() ?? new List<TenantDto>()
                 }).ToList() ?? new List<UnitDto>();
@@ -331,6 +333,8 @@ namespace KirayaDoor.Api.Controllers
                     UnitId = unitId,
                     TenantName = request.TenantName.Trim(),
                     TenantContactNumber = request.TenantContactNumber.Trim(),
+                    GovernmentId = request.GovernmentId,
+                    GovernmentTypeId = request.GovernmentTypeId,
                     IsActive = true // Always create as active
                 };
 
@@ -342,6 +346,8 @@ namespace KirayaDoor.Api.Controllers
                     TenantId = tenant.TenantId,
                     TenantName = tenant.TenantName,
                     TenantContactNumber = tenant.TenantContactNumber,
+                    GovernmentId = tenant.GovernmentId,
+                    GovernmentTypeId = tenant.GovernmentTypeId,
                     IsActive = tenant.IsActive
                 };
 
@@ -580,6 +586,30 @@ namespace KirayaDoor.Api.Controllers
                 }).ToList();
 
                 return Ok(expenseCycleDtos);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // GET: api/properties/government-id-types
+        [HttpGet("government-id-types")]
+        public async Task<ActionResult<IEnumerable<GovernmentIdTypeDto>>> GetGovernmentIdTypes()
+        {
+            try
+            {
+                var governmentIdTypes = await _context.GovernmentIdTypes
+                    .AsNoTracking()
+                    .ToListAsync();
+
+                var governmentIdTypeDtos = governmentIdTypes.Select(git => new GovernmentIdTypeDto
+                {
+                    GovernmentIdTypeId = git.GovernmentIdTypeId,
+                    GovernmentIdTypeName = git.GovernmentIdTypeName
+                }).ToList();
+
+                return Ok(governmentIdTypeDtos);
             }
             catch (Exception ex)
             {
@@ -848,6 +878,8 @@ namespace KirayaDoor.Api.Controllers
         public int TenantId { get; set; }
         public string TenantName { get; set; } = string.Empty;
         public string TenantContactNumber { get; set; } = string.Empty;
+        public string? GovernmentId { get; set; }
+        public int? GovernmentTypeId { get; set; }
         public bool IsActive { get; set; }
     }
 
@@ -855,6 +887,8 @@ namespace KirayaDoor.Api.Controllers
     {
         public string TenantName { get; set; } = string.Empty;
         public string TenantContactNumber { get; set; } = string.Empty;
+        public string? GovernmentId { get; set; }
+        public int? GovernmentTypeId { get; set; }
     }
 
     public class TenantExpenseDto
@@ -889,6 +923,12 @@ namespace KirayaDoor.Api.Controllers
     {
         public int ExpenseCycleId { get; set; }
         public string ExpenseCycleName { get; set; } = string.Empty;
+    }
+
+    public class GovernmentIdTypeDto
+    {
+        public int GovernmentIdTypeId { get; set; }
+        public string GovernmentIdTypeName { get; set; } = string.Empty;
     }
 
     public class PendingAmountDto

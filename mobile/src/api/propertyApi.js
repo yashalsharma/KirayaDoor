@@ -712,4 +712,42 @@ export const propertyApi = {
       throw error;
     }
   },
+
+  // Get government ID types
+  getGovernmentIdTypes: async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/government-id-types`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to fetch government ID types';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching government ID types:', error);
+      throw error;
+    }
+  },
 };

@@ -663,7 +663,7 @@ export default function LocationPickerModal({ navigation, route }) {
             <TouchableOpacity
               onPress={handleConfirm}
               style={{
-                backgroundColor: '#2563eb',
+                backgroundColor: '#4f39f6',
                 paddingVertical: 14,
                 borderRadius: 12,
                 alignItems: 'center',

@@ -62,7 +62,7 @@ function UnitCard({ item, navigation, onEdit, onDelete, isEditing, editingName, 
             alignItems: 'center',
           }}
         >
-          <Ionicons name="home" size={20} color="#c41e3a" />
+          <Ionicons name="home" size={20} color="#4f39f6" />
         </View>
 
         {/* Unit Info */}
@@ -102,7 +102,7 @@ function UnitCard({ item, navigation, onEdit, onDelete, isEditing, editingName, 
           )}
           <Text
             style={{
-              fontSize: 12,
+              fontSize: 10,
               color: '#9ca3af',
             }}
           >
@@ -530,7 +530,7 @@ export default function UnitsScreen({ navigation, route }) {
             alignItems: 'center',
           }}
         >
-          <Ionicons name="home" size={22} color="#c41e3a" />
+            <Ionicons name="home" size={22} color="#4f39f6" />
         </View>
         </View>
       </Pressable>

@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -23,7 +24,7 @@ const ACTION_BUTTONS_WIDTH = 80; // Width of hidden action buttons (vertical lay
 
 // Color palette - darker shades
 const colorPalette = [
-  { bg: '#c41e3a', light: '#e8495c' }, // Dark Red
+  { bg: '#2563eb', light: '#60a5fa' }, // Dark Blue
   { bg: '#1f4788', light: '#3d5a9e' }, // Dark Blue
   { bg: '#0d5e1e', light: '#2d7e3e' }, // Dark Green
   { bg: '#8b4513', light: '#a0612f' }, // Dark Brown
@@ -404,6 +405,13 @@ export default function PropertiesListScreen({ navigation, route }) {
   useEffect(() => {
     fetchProperties();
   }, [fetchProperties]);
+
+  // Refresh properties whenever the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchProperties();
+    }, [fetchProperties])
+  );
 
   const onRefresh = useCallback(async () => {
     if (!userId) {

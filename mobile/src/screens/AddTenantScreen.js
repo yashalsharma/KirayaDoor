@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Modal,
+  Keyboard,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,24 +22,26 @@ export default function AddTenantScreen({ navigation, route }) {
   const { unitId, unitName, propertyId } = route.params || {};
   const insets = useSafeAreaInsets();
   
-  // Step 1: Tenant Info
+  // Tenant Info
   const [tenantName, setTenantName] = useState('');
   const [tenantContactNumber, setTenantContactNumber] = useState('');
+  const [governmentId, setGovernmentId] = useState('');
+  const [governmentTypeId, setGovernmentTypeId] = useState(null);
   
-  // Step 2: Expenses
+  // Expenses
   const [expenses, setExpenses] = useState([]);
   const [expenseTypes, setExpenseTypes] = useState([]);
   const [expenseCycles, setExpenseCycles] = useState([]);
+  const [governmentIdTypes, setGovernmentIdTypes] = useState([]);
   
   // UI State
-  const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [loadingReferenceData, setLoadingReferenceData] = useState(false);
+  const [loadingReferenceData, setLoadingReferenceData] = useState(true);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   
   // Picker State
   const [pickerVisible, setPickerVisible] = useState(false);
-  const [pickerType, setPickerType] = useState(null); // 'type' or 'cycle'
+  const [pickerType, setPickerType] = useState(null); // 'type', 'cycle', or 'government'
   const [selectedExpenseId, setSelectedExpenseId] = useState(null);
   
   // Date Picker State
@@ -46,56 +49,83 @@ export default function AddTenantScreen({ navigation, route }) {
   const [datePickerMode, setDatePickerMode] = useState(null); // 'start' or 'end'
   const [datePickerValue, setDatePickerValue] = useState(new Date());
   const [originalDateValue, setOriginalDateValue] = useState(new Date());
+  
+  // Keyboard State
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
-  // Fetch reference data when moving to step 2
+  // Fetch reference data on mount
+  useEffect(() => {
+    fetchReferenceData();
+  }, []);
+
+  // Keyboard visibility listener
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setIsKeyboardVisible(true)
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setIsKeyboardVisible(false)
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
+
   const fetchReferenceData = useCallback(async () => {
     try {
       setLoadingReferenceData(true);
-      const [types, cycles] = await Promise.all([
+      const [types, cycles, govIdTypes] = await Promise.all([
         propertyApi.getExpenseTypes(),
         propertyApi.getExpenseCycles(),
+        propertyApi.getGovernmentIdTypes(),
       ]);
       setExpenseTypes(types);
       setExpenseCycles(cycles);
+      setGovernmentIdTypes(govIdTypes);
     } catch (error) {
-      Alert.alert('Error', 'Failed to load expense types and cycles');
+      Alert.alert('Error', 'Failed to load reference data');
       console.error('Error fetching reference data:', error);
     } finally {
       setLoadingReferenceData(false);
     }
   }, []);
 
-  const handleNextStep = () => {
-    if (currentStep === 1) {
-      // Validate step 1
-      if (!tenantName.trim()) {
-        Alert.alert('Error', 'Please enter tenant name');
-        return;
-      }
-      if (!tenantContactNumber.trim()) {
-        Alert.alert('Error', 'Please enter contact number');
-        return;
-      }
-      
-      setCurrentStep(2);
-      fetchReferenceData();
-    }
-  };
-
   const handleCreateTenant = async () => {
+    // Validate required fields
+    if (!tenantName.trim()) {
+      Alert.alert('Error', 'Please enter tenant name');
+      return;
+    }
+    if (!tenantContactNumber.trim()) {
+      Alert.alert('Error', 'Please enter contact number');
+      return;
+    }
+
     try {
       setLoading(true);
 
-      // Create tenant first
+      // Create tenant
       const newTenant = await propertyApi.createTenant(unitId, {
         tenantName: tenantName.trim(),
         tenantContactNumber: tenantContactNumber.trim(),
+        governmentId: governmentId.trim() || null,
+        governmentTypeId: governmentTypeId || null,
       });
 
       // Create expenses if any
       if (expenses.length > 0) {
         for (const expense of expenses) {
           try {
+            // Validate expense
+            if (!expense.typeId || !expense.cycleId || !expense.amount) {
+              console.warn('Skipping incomplete expense');
+              continue;
+            }
+
             await propertyApi.createTenantExpense(newTenant.tenantId, {
               tenantExpenseTypeId: expense.typeId,
               tenantExpenseCycleId: expense.cycleId,
@@ -163,6 +193,11 @@ export default function AddTenantScreen({ navigation, route }) {
     setPickerVisible(true);
   };
 
+  const openGovernmentTypePicker = () => {
+    setPickerType('government');
+    setPickerVisible(true);
+  };
+
   const closePicker = () => {
     setPickerVisible(false);
     setPickerType(null);
@@ -179,9 +214,13 @@ export default function AddTenantScreen({ navigation, route }) {
     closePicker();
   };
 
+  const handleSelectGovernmentType = (govTypeId) => {
+    setGovernmentTypeId(govTypeId);
+    closePicker();
+  };
+
   const openStartDatePicker = (expenseId) => {
     const expense = expenses.find(e => e.id === expenseId);
-    // Get the date - if it's already a Date object, use it directly; otherwise create new Date
     const initialDate = expense?.startDate 
       ? (expense.startDate instanceof Date 
           ? new Date(expense.startDate.getFullYear(), expense.startDate.getMonth(), expense.startDate.getDate())
@@ -196,7 +235,6 @@ export default function AddTenantScreen({ navigation, route }) {
 
   const openEndDatePicker = (expenseId) => {
     const expense = expenses.find(e => e.id === expenseId);
-    // Get the date - if it's already a Date object, use it directly; otherwise create new Date
     const initialDate = expense?.endDate 
       ? (expense.endDate instanceof Date 
           ? new Date(expense.endDate.getFullYear(), expense.endDate.getMonth(), expense.endDate.getDate())
@@ -216,16 +254,13 @@ export default function AddTenantScreen({ navigation, route }) {
   };
 
   const handleDatePickerChange = (event, selectedDate) => {
-    // Normalize the date to local timezone to avoid timezone shifts
     if (selectedDate) {
-      // Create a new date at midnight local time for the selected date
       const adjustedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
       setDatePickerValue(adjustedDate);
     }
   };
 
   const handleDatePickerConfirm = () => {
-    // Apply the selected date to the expense with proper normalization
     const normalizedDate = new Date(datePickerValue.getFullYear(), datePickerValue.getMonth(), datePickerValue.getDate());
     if (datePickerMode === 'start') {
       updateExpense(selectedExpenseId, 'startDate', normalizedDate);
@@ -236,7 +271,6 @@ export default function AddTenantScreen({ navigation, route }) {
   };
 
   const handleDatePickerCancel = () => {
-    // Revert to original date
     setDatePickerValue(originalDateValue);
     closeDatePicker();
   };
@@ -244,7 +278,6 @@ export default function AddTenantScreen({ navigation, route }) {
   const formatDateForDisplay = (date) => {
     if (!date) return 'Not set';
     const d = date instanceof Date ? date : new Date(date);
-    // Use local date components, not UTC
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -254,7 +287,6 @@ export default function AddTenantScreen({ navigation, route }) {
   const formatDateToLocalString = (date) => {
     if (!date) return null;
     const d = date instanceof Date ? date : new Date(date);
-    // Use local date components, not UTC (no timezone conversion)
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
@@ -266,206 +298,6 @@ export default function AddTenantScreen({ navigation, route }) {
     return cycle && cycle.expenseCycleName.toLowerCase() === 'onetime';
   };
 
-  if (currentStep === 1) {
-    return (
-      <LinearGradient
-        colors={['#e0e7ff', '#faf5ff', '#fce7f3']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ flex: 1 }}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={{ flex: 1 }}
-        >
-          {/* Header */}
-          <View
-            style={{
-              paddingTop: insets.top + 16,
-              paddingHorizontal: 16,
-              paddingBottom: 16,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <TouchableOpacity
-                onPress={() => navigation.goBack()}
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 22,
-                  backgroundColor: 'white',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <Ionicons name="chevron-back" size={24} color="#1e2939" />
-              </TouchableOpacity>
-              <View>
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontWeight: '700',
-                    color: '#1e2939',
-                  }}
-                >
-                  {unitName}
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    color: '#9ca3af',
-                  }}
-                >
-                  Step 1 of 2
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Content */}
-          <ScrollView
-            contentContainerStyle={{
-              paddingHorizontal: 16,
-              paddingVertical: 12,
-              flexGrow: 1,
-            }}
-            showsVerticalScrollIndicator={false}
-          >
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: '700',
-                color: '#1e2939',
-                marginBottom: 20,
-              }}
-            >
-              Tenant Details
-            </Text>
-
-            {/* Tenant Name Input */}
-            <View style={{ marginBottom: 16 }}>
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: '600',
-                  color: '#9ca3af',
-                  marginBottom: 6,
-                }}
-              >
-                Tenant Name *
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: 'white',
-                  borderRadius: 12,
-                  paddingHorizontal: 14,
-                  paddingVertical: 12,
-                  fontSize: 14,
-                  color: '#1e2939',
-                  borderWidth: 1,
-                  borderColor: '#e5e7eb',
-                }}
-                placeholder="Enter tenant name"
-                placeholderTextColor="#d1d5db"
-                value={tenantName}
-                onChangeText={setTenantName}
-              />
-            </View>
-
-            {/* Contact Number Input */}
-            <View style={{ marginBottom: 20 }}>
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: '600',
-                  color: '#9ca3af',
-                  marginBottom: 6,
-                }}
-              >
-                Contact Number *
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: 'white',
-                  borderRadius: 12,
-                  paddingHorizontal: 14,
-                  paddingVertical: 12,
-                  fontSize: 14,
-                  color: '#1e2939',
-                  borderWidth: 1,
-                  borderColor: '#e5e7eb',
-                }}
-                placeholder="Enter contact number"
-                placeholderTextColor="#d1d5db"
-                value={tenantContactNumber}
-                onChangeText={setTenantContactNumber}
-                keyboardType="phone-pad"
-              />
-            </View>
-
-            <View style={{ marginTop: 40 }} />
-          </ScrollView>
-
-          {/* Action Buttons */}
-          <View
-            style={{
-              paddingHorizontal: 16,
-              paddingBottom: insets.bottom + 16,
-              flexDirection: 'row',
-              gap: 12,
-            }}
-          >
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={{
-                flex: 1,
-                paddingVertical: 14,
-                borderRadius: 12,
-                borderWidth: 2,
-                borderColor: '#e5e7eb',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: '700',
-                  color: '#9ca3af',
-                }}
-              >
-                Cancel
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={handleNextStep}
-              style={{
-                flex: 1,
-                paddingVertical: 14,
-                borderRadius: 12,
-                backgroundColor: '#4f39f6',
-                justifyContent: 'center',
-                alignItems: 'center',
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: '700',
-                  color: 'white',
-                }}
-              >
-                Next: Expenses
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </LinearGradient>
-    );
-  }
-
-  // Step 2: Expenses (Optional)
   return (
     <LinearGradient
       colors={['#e0e7ff', '#faf5ff', '#fce7f3']}
@@ -477,47 +309,73 @@ export default function AddTenantScreen({ navigation, route }) {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
-        {/* Header */}
+        {/* Header - Matching TenantsScreen Style */}
         <View
           style={{
-            paddingTop: insets.top + 16,
+            backgroundColor: 'white',
+            paddingTop: 48,
             paddingHorizontal: 16,
-            paddingBottom: 16,
+            paddingBottom: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.1,
+            shadowRadius: 6,
+            elevation: 3,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TouchableOpacity
-              onPress={() => setCurrentStep(1)}
+          {/* Back Button - Figma Style */}
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: '#e8e5ff',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="chevron-back" size={22} color="#4f39f6" />
+          </TouchableOpacity>
+
+          {/* Unit Info - Center */}
+          <View style={{ flex: 1, marginHorizontal: 12 }}>
+            <Text
               style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: 'white',
-                justifyContent: 'center',
-                alignItems: 'center',
+                fontSize: 16,
+                fontWeight: 'bold',
+                color: '#1e2939',
+                marginBottom: 2,
               }}
             >
-              <Ionicons name="chevron-back" size={24} color="#1e2939" />
-            </TouchableOpacity>
-            <View>
-              <Text
-                style={{
-                  fontSize: 16,
-                  fontWeight: '700',
-                  color: '#1e2939',
-                }}
-              >
-                {unitName}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 11,
-                  color: '#9ca3af',
-                }}
-              >
-                Step 2 of 2
-              </Text>
-            </View>
+              {unitName}
+            </Text>
+            <Text
+              style={{
+                fontSize: 11,
+                color: '#9ca3af',
+              }}
+              numberOfLines={1}
+            >
+              Add Tenant
+            </Text>
+          </View>
+
+          {/* Unit Icon */}
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: '#e0e7ff',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="home" size={22} color="#4f39f6" />
           </View>
         </View>
 
@@ -538,7 +396,7 @@ export default function AddTenantScreen({ navigation, route }) {
                 color: '#9ca3af',
               }}
             >
-              Loading expense types...
+              Loading form...
             </Text>
           </View>
         ) : (
@@ -550,21 +408,245 @@ export default function AddTenantScreen({ navigation, route }) {
             }}
             showsVerticalScrollIndicator={false}
           >
+            {/* TENANT DETAILS SECTION */}
             <Text
               style={{
                 fontSize: 18,
                 fontWeight: '700',
                 color: '#1e2939',
+                marginBottom: 20,
+              }}
+            >
+              Tenant Details
+            </Text>
+
+            {/* Tenant Name Input */}
+            <View
+              style={{
+                backgroundColor: 'white',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 16,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.06,
+                shadowRadius: 6,
+                elevation: 3,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                <Ionicons name="person" size={16} color="#4f39f6" />
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '700',
+                    color: '#364153',
+                  }}
+                >
+                  Tenant Name
+                  <Text style={{ color: '#fb2c36' }}> *</Text>
+                </Text>
+              </View>
+              <TextInput
+                style={{
+                  backgroundColor: '#f9fafb',
+                  borderRadius: 14,
+                  borderWidth: 1.108,
+                  borderColor: '#e5e7eb',
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  fontSize: 14,
+                  color: '#1e2939',
+                }}
+                placeholder="Enter full name"
+                placeholderTextColor="rgba(10,10,10,0.5)"
+                value={tenantName}
+                onChangeText={setTenantName}
+              />
+            </View>
+
+            {/* Contact Number Input */}
+            <View
+              style={{
+                backgroundColor: 'white',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 16,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.06,
+                shadowRadius: 6,
+                elevation: 3,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                <Ionicons name="call" size={16} color="#4f39f6" />
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '700',
+                    color: '#364153',
+                  }}
+                >
+                  Contact Number
+                  <Text style={{ color: '#fb2c36' }}> *</Text>
+                </Text>
+              </View>
+              <TextInput
+                style={{
+                  backgroundColor: '#f9fafb',
+                  borderRadius: 14,
+                  borderWidth: 1.108,
+                  borderColor: '#e5e7eb',
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  fontSize: 14,
+                  color: '#1e2939',
+                }}
+                placeholder="Enter contact number"
+                placeholderTextColor="rgba(10,10,10,0.5)"
+                value={tenantContactNumber}
+                onChangeText={setTenantContactNumber}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            {/* GOVERNMENT ID SECTION */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 12 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: '700',
+                  color: '#1e2939',
+                }}
+              >
+                Government ID
+              </Text>
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: '#9ca3af',
+                  marginLeft: 6,
+                }}
+              >
+                (Optional)
+              </Text>
+            </View>
+
+            {/* Government ID Type Picker */}
+            <View
+              style={{
+                backgroundColor: 'white',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 16,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.06,
+                shadowRadius: 6,
+                elevation: 3,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                <Ionicons name="document-text" size={16} color="#4f39f6" />
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '700',
+                    color: '#364153',
+                  }}
+                >
+                  ID Type
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={openGovernmentTypePicker}
+                style={{
+                  backgroundColor: '#f9fafb',
+                  borderRadius: 14,
+                  borderWidth: 1.108,
+                  borderColor: '#e5e7eb',
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: governmentTypeId ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                    flex: 1,
+                  }}
+                >
+                  {governmentIdTypes.find(t => t.governmentIdTypeId === governmentTypeId)
+                    ?.governmentIdTypeName || 'Select ID type'}
+                </Text>
+                <Ionicons name="chevron-down" size={20} color="#d1d5db" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Government ID Input */}
+            <View
+              style={{
+                backgroundColor: 'white',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 24,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.06,
+                shadowRadius: 6,
+                elevation: 3,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                <Ionicons name="shield-checkmark" size={16} color="#4f39f6" />
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '700',
+                    color: '#364153',
+                  }}
+                >
+                  ID Number
+                </Text>
+              </View>
+              <TextInput
+                style={{
+                  backgroundColor: '#f9fafb',
+                  borderRadius: 14,
+                  borderWidth: 1.108,
+                  borderColor: '#e5e7eb',
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  fontSize: 14,
+                  color: '#1e2939',
+                }}
+                placeholder="Enter government ID"
+                placeholderTextColor="rgba(10,10,10,0.5)"
+                value={governmentId}
+                onChangeText={setGovernmentId}
+              />
+            </View>
+
+            {/* EXPENSES SECTION */}
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: '700',
+                color: '#1e2939',
                 marginBottom: 12,
               }}
             >
-              Tenant Expenses
+              Expenses
             </Text>
             <Text
               style={{
                 fontSize: 12,
                 color: '#9ca3af',
-                marginBottom: 20,
+                marginBottom: 16,
               }}
             >
               Add expense details (optional)
@@ -573,8 +655,9 @@ export default function AddTenantScreen({ navigation, route }) {
             {expenses.length === 0 ? (
               <View
                 style={{
-                  paddingVertical: 40,
+                  paddingVertical: 30,
                   alignItems: 'center',
+                  marginBottom: 12,
                 }}
               >
                 <Ionicons name="receipt-outline" size={48} color="#d1d5db" />
@@ -635,26 +718,40 @@ export default function AddTenantScreen({ navigation, route }) {
                     </View>
 
                     {/* Amount */}
-                    <TextInput
-                      style={{
-                        backgroundColor: '#f9fafb',
-                        borderRadius: 8,
-                        paddingHorizontal: 12,
-                        paddingVertical: 10,
-                        fontSize: 13,
-                        color: '#1e2939',
-                        borderWidth: 1,
-                        borderColor: '#e5e7eb',
-                        marginBottom: 10,
-                      }}
-                      placeholder="Amount (₹)"
-                      placeholderTextColor="#d1d5db"
-                      value={expense.amount}
-                      onChangeText={(value) =>
-                        updateExpense(expense.id, 'amount', value)
-                      }
-                      keyboardType="decimal-pad"
-                    />
+                    <View style={{ marginBottom: 10 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                            <Ionicons name="cash" size={14} color="#4f39f6" />
+                            <Text
+                              style={{
+                                fontSize: 13,
+                                fontWeight: '700',
+                                color: '#364153',
+                              }}
+                            >
+                              Amount
+                              <Text style={{ color: '#fb2c36' }}> *</Text>
+                            </Text>
+                          </View>
+                      <TextInput
+                        style={{
+                          backgroundColor: '#f9fafb',
+                          borderRadius: 12,
+                          borderWidth: 1.108,
+                          borderColor: '#e5e7eb',
+                          paddingHorizontal: 14,
+                          paddingVertical: 10,
+                          fontSize: 13,
+                          color: '#1e2939',
+                        }}
+                        placeholder="Enter amount (₹)"
+                        placeholderTextColor="rgba(10,10,10,0.5)"
+                        value={expense.amount}
+                        onChangeText={(value) =>
+                          updateExpense(expense.id, 'amount', value)
+                        }
+                        keyboardType="decimal-pad"
+                      />
+                    </View>
 
                     {/* Type & Cycle */}
                     <View
@@ -665,23 +762,26 @@ export default function AddTenantScreen({ navigation, route }) {
                       }}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: '#6b7280',
-                            marginBottom: 4,
-                          }}
-                        >
-                          Type
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                          <Ionicons name="pricetag" size={13} color="#4f39f6" />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              fontWeight: '700',
+                              color: '#364153',
+                            }}
+                          >
+                            Type
+                          </Text>
+                        </View>
                         <TouchableOpacity
                           onPress={() => openTypePicker(expense.id)}
                           style={{
                             backgroundColor: '#f9fafb',
-                            borderRadius: 8,
-                            paddingHorizontal: 12,
+                            borderRadius: 12,
+                            paddingHorizontal: 14,
                             paddingVertical: 10,
-                            borderWidth: 1,
+                            borderWidth: 1.108,
                             borderColor: '#e5e7eb',
                             flexDirection: 'row',
                             justifyContent: 'space-between',
@@ -691,7 +791,8 @@ export default function AddTenantScreen({ navigation, route }) {
                           <Text
                             style={{
                               fontSize: 12,
-                              color: expense.typeId ? '#1e2939' : '#d1d5db',
+                              color: expense.typeId ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                              flex: 1,
                             }}
                           >
                             {expenseTypes.find(t => t.expenseTypeId === expense.typeId)
@@ -702,23 +803,26 @@ export default function AddTenantScreen({ navigation, route }) {
                       </View>
 
                       <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: '#6b7280',
-                            marginBottom: 4,
-                          }}
-                        >
-                          Cycle
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                          <Ionicons name="calendar" size={13} color="#4f39f6" />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              fontWeight: '700',
+                              color: '#364153',
+                            }}
+                          >
+                            Cycle
+                          </Text>
+                        </View>
                         <TouchableOpacity
                           onPress={() => openCyclePicker(expense.id)}
                           style={{
                             backgroundColor: '#f9fafb',
-                            borderRadius: 8,
-                            paddingHorizontal: 12,
+                            borderRadius: 12,
+                            paddingHorizontal: 14,
                             paddingVertical: 10,
-                            borderWidth: 1,
+                            borderWidth: 1.108,
                             borderColor: '#e5e7eb',
                             flexDirection: 'row',
                             justifyContent: 'space-between',
@@ -728,7 +832,8 @@ export default function AddTenantScreen({ navigation, route }) {
                           <Text
                             style={{
                               fontSize: 12,
-                              color: expense.cycleId ? '#1e2939' : '#d1d5db',
+                              color: expense.cycleId ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                              flex: 1,
                             }}
                           >
                             {expenseCycles.find(c => c.expenseCycleId === expense.cycleId)
@@ -748,23 +853,27 @@ export default function AddTenantScreen({ navigation, route }) {
                       }}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text
-                          style={{
-                            fontSize: 11,
-                            color: '#6b7280',
-                            marginBottom: 4,
-                          }}
-                        >
-                          Start Date *
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                          <Ionicons name="calendar" size={13} color="#4f39f6" />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              fontWeight: '700',
+                              color: '#364153',
+                            }}
+                          >
+                            Start Date
+                            <Text style={{ color: '#fb2c36' }}> *</Text>
+                          </Text>
+                        </View>
                         <TouchableOpacity
                           onPress={() => openStartDatePicker(expense.id)}
                           style={{
                             backgroundColor: '#f9fafb',
-                            borderRadius: 8,
-                            paddingHorizontal: 12,
+                            borderRadius: 12,
+                            paddingHorizontal: 14,
                             paddingVertical: 10,
-                            borderWidth: 1,
+                            borderWidth: 1.108,
                             borderColor: '#e5e7eb',
                             flexDirection: 'row',
                             justifyContent: 'space-between',
@@ -774,35 +883,39 @@ export default function AddTenantScreen({ navigation, route }) {
                           <Text
                             style={{
                               fontSize: 12,
-                              color: expense.startDate ? '#1e2939' : '#d1d5db',
+                              color: expense.startDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                              flex: 1,
                             }}
                           >
                             {formatDateForDisplay(expense.startDate)}
                           </Text>
-                          <Ionicons name="calendar" size={16} color="#d1d5db" />
+                          <Ionicons name="chevron-down" size={16} color="#d1d5db" />
                         </TouchableOpacity>
                       </View>
 
                       {!isOneTimeCycle(expense.cycleId) && (
                         <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              color: '#6b7280',
-                              marginBottom: 4,
-                            }}
-                          >
-                            End Date (Optional)
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                            <Ionicons name="calendar" size={13} color="#4f39f6" />
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: '700',
+                                color: '#364153',
+                              }}
+                            >
+                              End Date
+                            </Text>
+                          </View>
                           <TouchableOpacity
                             onPress={() => openEndDatePicker(expense.id)}
                             style={{
                               backgroundColor: '#f9fafb',
-                              borderRadius: 8,
-                              paddingHorizontal: 12,
+                              borderRadius: 12,
+                              paddingHorizontal: 14,
                               paddingVertical: 10,
-                              borderWidth: 1,
-                              borderColor: expense.endDate ? '#e5e7eb' : '#f0f0f0',
+                              borderWidth: 1.108,
+                              borderColor: '#e5e7eb',
                               flexDirection: 'row',
                               justifyContent: 'space-between',
                               alignItems: 'center',
@@ -811,52 +924,113 @@ export default function AddTenantScreen({ navigation, route }) {
                             <Text
                               style={{
                                 fontSize: 12,
-                                color: expense.endDate ? '#1e2939' : '#d1d5db',
+                                color: expense.endDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                                flex: 1,
                               }}
                             >
                               {formatDateForDisplay(expense.endDate)}
                             </Text>
-                            <Ionicons
-                              name="calendar"
-                              size={16}
-                              color={expense.endDate ? '#4f39f6' : '#d1d5db'}
-                            />
+                            <Ionicons name="chevron-down" size={16} color="#d1d5db" />
                           </TouchableOpacity>
                         </View>
                       )}
                       {isOneTimeCycle(expense.cycleId) && (
                         <View style={{ flex: 1 }}>
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              color: '#d1d5db',
-                              marginBottom: 4,
-                            }}
-                          >
-                            End Date (N/A)
-                          </Text>
                           <View
                             style={{
-                              backgroundColor: '#f3f4f6',
-                              borderRadius: 8,
-                              paddingHorizontal: 12,
-                              paddingVertical: 10,
-                              borderWidth: 1,
-                              borderColor: '#e5e7eb',
-                              opacity: 0.6,
+                              backgroundColor: 'white',
+                              borderRadius: 14,
+                              padding: 14,
+                              shadowColor: '#000',
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.04,
+                              shadowRadius: 4,
+                              elevation: 2,
                             }}
                           >
-                            <Text
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                              <Ionicons name="calendar" size={13} color="#d1d5db" />
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: '700',
+                                  color: '#d1d5db',
+                                }}
+                              >
+                                End Date
+                              </Text>
+                            </View>
+                            <View
                               style={{
-                                fontSize: 12,
-                                color: '#9ca3af',
+                                backgroundColor: '#f3f4f6',
+                                borderRadius: 12,
+                                paddingHorizontal: 14,
+                                paddingVertical: 10,
+                                borderWidth: 1.108,
+                                borderColor: '#e5e7eb',
+                                opacity: 0.6,
                               }}
                             >
-                              Not applicable
-                            </Text>
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  color: '#9ca3af',
+                                }}
+                              >
+                                Not applicable
+                              </Text>
+                            </View>
                           </View>
                         </View>
                       )}
+                    </View>
+
+                    {/* Comments */}
+                    <View
+                      style={{
+                        backgroundColor: 'white',
+                        borderRadius: 14,
+                        padding: 14,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.04,
+                        shadowRadius: 4,
+                        elevation: 2,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                        <Ionicons name="document-attachment" size={13} color="#4f39f6" />
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: '700',
+                            color: '#364153',
+                          }}
+                        >
+                          Comments
+                        </Text>
+                      </View>
+                      <TextInput
+                        style={{
+                          backgroundColor: '#f9fafb',
+                          borderRadius: 12,
+                          borderWidth: 1.108,
+                          borderColor: '#e5e7eb',
+                          paddingHorizontal: 14,
+                          paddingVertical: 10,
+                          fontSize: 13,
+                          color: '#1e2939',
+                          minHeight: 80,
+                          textAlignVertical: 'top',
+                        }}
+                        placeholder="Add any comments here"
+                        placeholderTextColor="rgba(10,10,10,0.5)"
+                        value={expense.comments}
+                        onChangeText={(value) =>
+                          updateExpense(expense.id, 'comments', value)
+                        }
+                        multiline
+                      />
                     </View>
                   </View>
                 ))}
@@ -895,43 +1069,18 @@ export default function AddTenantScreen({ navigation, route }) {
           </ScrollView>
         )}
 
-        {/* Action Buttons */}
+        {/* Action Button */}
+        {!isKeyboardVisible && (
         <View
           style={{
             paddingHorizontal: 16,
             paddingBottom: insets.bottom + 16,
-            flexDirection: 'row',
-            gap: 12,
           }}
         >
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={{
-              flex: 1,
-              paddingVertical: 14,
-              borderRadius: 12,
-              borderWidth: 2,
-              borderColor: '#e5e7eb',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: '700',
-                color: '#9ca3af',
-              }}
-            >
-              Cancel
-            </Text>
-          </TouchableOpacity>
-
           <TouchableOpacity
             disabled={loading}
             onPress={handleCreateTenant}
             style={{
-              flex: 1,
               paddingVertical: 14,
               borderRadius: 12,
               backgroundColor: '#4f39f6',
@@ -950,11 +1099,12 @@ export default function AddTenantScreen({ navigation, route }) {
                   color: 'white',
                 }}
               >
-                Create Tenant
+                Submit Tenant Details
               </Text>
             )}
           </TouchableOpacity>
         </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* Picker Modal */}
@@ -998,7 +1148,11 @@ export default function AddTenantScreen({ navigation, route }) {
                   color: '#1e2939',
                 }}
               >
-                {pickerType === 'type' ? 'Select Expense Type' : 'Select Billing Cycle'}
+                {pickerType === 'type'
+                  ? 'Select Expense Type'
+                  : pickerType === 'cycle'
+                  ? 'Select Billing Cycle'
+                  : 'Select ID Type'}
               </Text>
               <TouchableOpacity onPress={closePicker}>
                 <Ionicons name="close" size={24} color="#9ca3af" />
@@ -1046,7 +1200,8 @@ export default function AddTenantScreen({ navigation, route }) {
                         )}
                     </TouchableOpacity>
                   ))
-                : expenseCycles.map((cycle) => (
+                : pickerType === 'cycle'
+                ? expenseCycles.map((cycle) => (
                     <TouchableOpacity
                       key={cycle.expenseCycleId}
                       onPress={() => handleSelectCycle(cycle.expenseCycleId)}
@@ -1078,13 +1233,44 @@ export default function AddTenantScreen({ navigation, route }) {
                           />
                         )}
                     </TouchableOpacity>
+                  ))
+                : governmentIdTypes.map((govType) => (
+                    <TouchableOpacity
+                      key={govType.governmentIdTypeId}
+                      onPress={() => handleSelectGovernmentType(govType.governmentIdTypeId)}
+                      style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 14,
+                        borderBottomWidth: 1,
+                        borderBottomColor: '#f3f4f6',
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          color: '#1e2939',
+                        }}
+                      >
+                        {govType.governmentIdTypeName}
+                      </Text>
+                      {governmentTypeId === govType.governmentIdTypeId && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={20}
+                          color="#4f39f6"
+                        />
+                      )}
+                    </TouchableOpacity>
                   ))}
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* Date Picker Modal with Done/Cancel Buttons */}
+      {/* Date Picker Modal */}
       {datePickerVisible && (
         <Modal
           visible={datePickerVisible}
@@ -1273,7 +1459,8 @@ export default function AddTenantScreen({ navigation, route }) {
                   lineHeight: 20,
                 }}
               >
-                Tenant has been successfully added to the unit.
+                Tenant has been successfully added to the unit with{' '}
+                {expenses.length > 0 ? `${expenses.length} expense(s)` : 'no expenses'}.
               </Text>
 
               {/* OK Button */}

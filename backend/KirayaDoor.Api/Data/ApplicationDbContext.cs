@@ -15,6 +15,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Entities.Property> Properties { get; set; }
     public DbSet<Entities.Unit> Units { get; set; }
     public DbSet<Entities.Tenant> Tenants { get; set; }
+    public DbSet<Entities.GovernmentIdType> GovernmentIdTypes { get; set; }
     public DbSet<Entities.ExpenseType> ExpenseTypes { get; set; }
     public DbSet<Entities.ExpenseCycle> ExpenseCycles { get; set; }
     public DbSet<Entities.TenantExpense> TenantExpenses { get; set; }
@@ -56,6 +57,13 @@ public class ApplicationDbContext : DbContext
             new Entities.ExpenseCycle { ExpenseCycleId = 3, ExpenseCycleName = "Quarter" },
             new Entities.ExpenseCycle { ExpenseCycleId = 4, ExpenseCycleName = "HalfYear" },
             new Entities.ExpenseCycle { ExpenseCycleId = 5, ExpenseCycleName = "Annual" }
+        );
+
+        // Seed GovernmentIdTypes
+        modelBuilder.Entity<Entities.GovernmentIdType>().HasData(
+            new Entities.GovernmentIdType { GovernmentIdTypeId = 1, GovernmentIdTypeName = "Aadhar" },
+            new Entities.GovernmentIdType { GovernmentIdTypeId = 2, GovernmentIdTypeName = "Pancard" },
+            new Entities.GovernmentIdType { GovernmentIdTypeId = 3, GovernmentIdTypeName = "DrivingLicense" }
         );
     }
 }
