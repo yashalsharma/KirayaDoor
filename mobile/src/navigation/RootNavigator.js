@@ -10,6 +10,10 @@ import PropertyDetailsScreen from '../screens/PropertyDetailsScreen';
 import UnitsScreen from '../screens/UnitsScreen';
 import TenantsScreen from '../screens/TenantsScreen';
 import AddTenantScreen from '../screens/AddTenantScreen';
+import TenantStatementScreen from '../screens/TenantStatementScreen';
+import EditTenantDetailsSheet from '../screens/EditTenantDetailsSheet';
+import AddExpenseSheet from '../screens/AddExpenseSheet';
+import RecordPaymentSheet from '../screens/RecordPaymentSheet';
 import LocationPickerModal from '../screens/LocationPickerModal';
 
 const Stack = createNativeStackNavigator();
@@ -66,6 +70,26 @@ export default function RootNavigator() {
           name="AddTenant"
           component={AddTenantScreen}
           options={{ title: 'Add Tenant' }}
+        />
+        <Stack.Screen
+          name="TenantStatement"
+          component={TenantStatementScreen}
+          options={{ title: 'Tenant Statement' }}
+        />
+        <Stack.Screen
+          name="EditTenantDetails"
+          component={EditTenantDetailsSheet}
+          options={{ title: 'Edit Tenant Details' }}
+        />
+        <Stack.Screen
+          name="AddExpense"
+          component={AddExpenseSheet}
+          options={{ title: 'Add Expense' }}
+        />
+        <Stack.Screen
+          name="RecordPayment"
+          component={RecordPaymentSheet}
+          options={{ title: 'Record Payment' }}
         />
         <Stack.Screen
           name="LocationPicker"

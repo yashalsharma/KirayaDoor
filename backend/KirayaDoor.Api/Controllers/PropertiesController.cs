@@ -11,10 +11,14 @@ namespace KirayaDoor.Api.Controllers
     public class PropertiesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ITenantService _tenantService;
+        private readonly ITenantStatementService _tenantStatementService;
 
-        public PropertiesController(ApplicationDbContext context)
+        public PropertiesController(ApplicationDbContext context, ITenantService tenantService, ITenantStatementService tenantStatementService)
         {
             _context = context;
+            _tenantService = tenantService;
+            _tenantStatementService = tenantStatementService;
         }
 
         // GET: api/properties/owner/{userId}
@@ -114,6 +118,191 @@ namespace KirayaDoor.Api.Controllers
                 var pendingAmountService = HttpContext.RequestServices.GetRequiredService<PendingAmountService>();
                 var pendingAmount = await pendingAmountService.CalculateTenantPendingAmountAsync(tenantId);
                 return Ok(new PendingAmountDto { PendingAmount = pendingAmount });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // GET: api/tenants/{tenantId}/details
+        [HttpGet("tenants/{tenantId}/details")]
+        public async Task<ActionResult<TenantDetailsDto>> GetTenantDetails(int tenantId)
+        {
+            try
+            {
+                var tenantDetails = await _tenantService.GetTenantDetailsAsync(tenantId);
+                if (tenantDetails == null)
+                    return NotFound(new { error = "Tenant not found" });
+
+                return Ok(tenantDetails);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // PUT: api/tenants/{tenantId}/details
+        [HttpPut("tenants/{tenantId}/details")]
+        public async Task<ActionResult<TenantDetailsDto>> UpdateTenantDetails(int tenantId, [FromBody] UpdateTenantDetailsRequest request)
+        {
+            try
+            {
+                var tenantDetails = await _tenantService.UpdateTenantDetailsAsync(tenantId, request);
+                if (tenantDetails == null)
+                    return NotFound(new { error = "Tenant not found" });
+
+                return Ok(tenantDetails);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // GET: api/tenants/{tenantId}/statement/{year}/{month}
+        [HttpGet("tenants/{tenantId}/statement/{year}/{month}")]
+        public async Task<ActionResult<TenantStatementDto>> GetTenantStatement(int tenantId, int year, int month)
+        {
+            try
+            {
+                if (month < 1 || month > 12)
+                    return BadRequest(new { error = "Month must be between 1 and 12" });
+
+                var statement = await _tenantStatementService.GetMonthlyStatementAsync(tenantId, year, month);
+                if (statement == null)
+                    return NotFound(new { error = "Tenant not found" });
+
+                return Ok(statement);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // POST: api/tenants/{tenantId}/expenses
+        [HttpPost("tenants/{tenantId}/expenses")]
+        public async Task<ActionResult<StatementLineItemDto>> AddTenantExpense(int tenantId, [FromBody] AddTenantExpenseRequest request)
+        {
+            try
+            {
+                var lineItem = await _tenantStatementService.AddTenantExpenseAsync(tenantId, request);
+                if (lineItem == null)
+                    return NotFound(new { error = "Tenant not found" });
+
+                return Ok(lineItem);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // GET: api/tenants/{tenantId}/expenses
+        [HttpGet("tenants/{tenantId}/expenses")]
+        public async Task<ActionResult<List<TenantExpenseDto>>> GetTenantExpenses(int tenantId)
+        {
+            try
+            {
+                // Verify tenant exists first
+                var tenant = await _context.Tenants.FindAsync(tenantId);
+                if (tenant == null)
+                    return NotFound(new { error = "Tenant not found" });
+
+                var expenses = await _tenantStatementService.GetTenantActiveExpensesAsync(tenantId);
+                return Ok(expenses ?? new List<TenantExpenseDto>());
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // PUT: api/tenants/{tenantId}/expenses/{expenseId}
+        [HttpPut("tenants/{tenantId}/expenses/{expenseId}")]
+        public async Task<ActionResult<StatementLineItemDto>> UpdateTenantExpense(int tenantId, int expenseId, [FromBody] UpdateTenantExpenseRequest request)
+        {
+            try
+            {
+                var lineItem = await _tenantStatementService.UpdateTenantExpenseAsync(tenantId, expenseId, request);
+                if (lineItem == null)
+                    return NotFound(new { error = "Expense not found" });
+
+                return Ok(lineItem);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // DELETE: api/tenants/{tenantId}/expenses/{expenseId}
+        [HttpDelete("tenants/{tenantId}/expenses/{expenseId}")]
+        public async Task<ActionResult> RetireTenantExpense(int tenantId, int expenseId)
+        {
+            try
+            {
+                var result = await _tenantStatementService.RetireTenantExpenseAsync(tenantId, expenseId);
+                if (!result)
+                    return NotFound(new { error = "Expense not found" });
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // POST: api/tenants/{tenantId}/payments
+        [HttpPost("tenants/{tenantId}/payments")]
+        public async Task<ActionResult<StatementLineItemDto>> RecordPayment(int tenantId, [FromBody] RecordPaymentRequest request)
+        {
+            try
+            {
+                var lineItem = await _tenantStatementService.RecordPaymentAsync(tenantId, request);
+                if (lineItem == null)
+                    return NotFound(new { error = "Tenant not found" });
+
+                return Ok(lineItem);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // DELETE: api/tenants/{tenantId}
+        [HttpDelete("tenants/{tenantId}")]
+        public async Task<ActionResult> DeleteTenant(int tenantId)
+        {
+            try
+            {
+                var success = await _tenantStatementService.DeleteTenantAsync(tenantId);
+                if (!success)
+                    return NotFound(new { error = "Tenant not found" });
+
+                return Ok(new { message = "Tenant deleted successfully" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // PUT: api/tenants/{tenantId}/mark-inactive
+        [HttpPut("tenants/{tenantId}/mark-inactive")]
+        public async Task<ActionResult> MarkTenantAsInactive(int tenantId)
+        {
+            try
+            {
+                var success = await _tenantStatementService.MarkTenantAsInactiveAsync(tenantId);
+                if (!success)
+                    return NotFound(new { error = "Tenant not found" });
+
+                return Ok(new { message = "Tenant marked as inactive" });
             }
             catch (Exception ex)
             {
@@ -359,108 +548,6 @@ namespace KirayaDoor.Api.Controllers
             }
         }
 
-        // POST: api/tenants/{tenantId}/expenses
-        [HttpPost("tenants/{tenantId}/expenses")]
-        public async Task<ActionResult<TenantExpenseDto>> CreateTenantExpense(int tenantId, [FromBody] CreateTenantExpenseRequest request)
-        {
-            try
-            {
-                // Verify tenant exists
-                var tenant = await _context.Tenants.FindAsync(tenantId);
-                if (tenant == null)
-                {
-                    return NotFound(new { error = "Tenant not found" });
-                }
-
-                if (request.TenantExpenseAmount <= 0)
-                {
-                    return BadRequest(new { error = "Expense amount must be greater than 0" });
-                }
-
-                if (request.TenantExpenseTypeId <= 0)
-                {
-                    return BadRequest(new { error = "Expense type is required" });
-                }
-
-                if (request.TenantExpenseCycleId <= 0)
-                {
-                    return BadRequest(new { error = "Expense cycle is required" });
-                }
-
-                // Verify expense type and cycle exist
-                var expenseType = await _context.ExpenseTypes.FindAsync(request.TenantExpenseTypeId);
-                if (expenseType == null)
-                {
-                    return BadRequest(new { error = "Invalid expense type" });
-                }
-
-                var expenseCycle = await _context.ExpenseCycles.FindAsync(request.TenantExpenseCycleId);
-                if (expenseCycle == null)
-                {
-                    return BadRequest(new { error = "Invalid expense cycle" });
-                }
-
-                // Parse date strings to DateTime objects (IST, no timezone conversion)
-                if (!DateTime.TryParseExact(request.TenantExpenseStartDate, "yyyy-MM-dd", 
-                    System.Globalization.CultureInfo.InvariantCulture, 
-                    System.Globalization.DateTimeStyles.None, out var startDate))
-                {
-                    return BadRequest(new { error = "Invalid start date format. Use YYYY-MM-DD" });
-                }
-
-                DateTime? endDate = null;
-                if (!string.IsNullOrEmpty(request.TenantExpenseEndDate))
-                {
-                    if (!DateTime.TryParseExact(request.TenantExpenseEndDate, "yyyy-MM-dd",
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        System.Globalization.DateTimeStyles.None, out var parsedEndDate))
-                    {
-                        return BadRequest(new { error = "Invalid end date format. Use YYYY-MM-DD" });
-                    }
-                    endDate = parsedEndDate;
-                }
-
-                // For OneTime cycles, automatically set end date to start date
-                DateTime? finalEndDate = endDate;
-                if (expenseCycle.ExpenseCycleName.ToLower() == "onetime")
-                {
-                    finalEndDate = startDate;
-                }
-
-                var tenantExpense = new TenantExpense
-                {
-                    TenantId = tenantId,
-                    TenantExpenseTypeId = request.TenantExpenseTypeId,
-                    TenantExpenseCycleId = request.TenantExpenseCycleId,
-                    TenantExpenseStartDate = startDate,
-                    TenantExpenseEndDate = finalEndDate,
-                    TenantExpenseAmount = request.TenantExpenseAmount,
-                    Comments = request.Comments
-                };
-
-                _context.TenantExpenses.Add(tenantExpense);
-                await _context.SaveChangesAsync();
-
-                var tenantExpenseDto = new TenantExpenseDto
-                {
-                    TenantExpenseId = tenantExpense.TenantExpenseId,
-                    TenantId = tenantExpense.TenantId,
-                    TenantExpenseTypeId = tenantExpense.TenantExpenseTypeId,
-                    TenantExpenseCycleId = tenantExpense.TenantExpenseCycleId,
-                    TenantExpenseStartDate = tenantExpense.TenantExpenseStartDate,
-                    TenantExpenseEndDate = tenantExpense.TenantExpenseEndDate,
-                    TenantExpenseAmount = tenantExpense.TenantExpenseAmount,
-                    Comments = tenantExpense.Comments
-                };
-
-                return CreatedAtAction(nameof(CreateTenantExpense), new { tenantId = tenantId }, tenantExpenseDto);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { error = ex.Message });
-            }
-        }
-
         // DELETE: api/properties/{propertyId}/tenants/{tenantId}
         [HttpDelete("{propertyId}/tenants/{tenantId}")]
 #pragma warning disable CS8620
@@ -506,44 +593,6 @@ namespace KirayaDoor.Api.Controllers
             }
         }
 #pragma warning restore CS8620
-
-        // DELETE: api/tenants/{tenantId}/expenses/{tenantExpenseId}
-        [HttpDelete("tenants/{tenantId}/expenses/{tenantExpenseId}")]
-        public async Task<IActionResult> DeleteTenantExpense(int tenantId, int tenantExpenseId)
-        {
-            try
-            {
-                var tenantExpense = await _context.TenantExpenses.FindAsync(tenantExpenseId);
-                if (tenantExpense == null)
-                {
-                    return NotFound(new { error = "Tenant expense not found" });
-                }
-
-                if (tenantExpense.TenantId != tenantId)
-                {
-                    return BadRequest(new { error = "Tenant expense does not belong to this tenant" });
-                }
-
-                // Delete associated paid expenses
-                var paidExpenses = await _context.PaidExpenses
-                    .Where(pe => pe.TenantExpenseId == tenantExpenseId)
-                    .ToListAsync();
-                
-                if (paidExpenses.Any())
-                {
-                    _context.PaidExpenses.RemoveRange(paidExpenses);
-                }
-
-                _context.TenantExpenses.Remove(tenantExpense);
-                await _context.SaveChangesAsync();
-
-                return NoContent();
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { error = ex.Message });
-            }
-        }
 
         // GET: api/properties/expense-types
         [HttpGet("expense-types")]
@@ -889,18 +938,6 @@ namespace KirayaDoor.Api.Controllers
         public string TenantContactNumber { get; set; } = string.Empty;
         public string? GovernmentId { get; set; }
         public int? GovernmentTypeId { get; set; }
-    }
-
-    public class TenantExpenseDto
-    {
-        public int TenantExpenseId { get; set; }
-        public int TenantId { get; set; }
-        public int TenantExpenseTypeId { get; set; }
-        public int TenantExpenseCycleId { get; set; }
-        public DateTime TenantExpenseStartDate { get; set; }
-        public DateTime? TenantExpenseEndDate { get; set; }
-        public decimal TenantExpenseAmount { get; set; }
-        public string? Comments { get; set; }
     }
 
     public class CreateTenantExpenseRequest

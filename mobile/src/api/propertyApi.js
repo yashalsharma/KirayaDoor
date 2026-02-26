@@ -750,4 +750,405 @@ export const propertyApi = {
       throw error;
     }
   },
+
+  // Get tenant details
+  getTenantDetails: async (tenantId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/details`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to fetch tenant details';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error fetching tenant details:', error);
+      throw error;
+    }
+  },
+
+  // Update tenant details
+  updateTenantDetails: async (tenantId, details) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/details`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            tenantName: details.tenantName,
+            tenantContactNumber: details.tenantContactNumber,
+            governmentId: details.governmentId,
+            governmentTypeId: details.governmentTypeId,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to update tenant details';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error updating tenant details:', error);
+      throw error;
+    }
+  },
+
+  // Get tenant statement for a specific month
+  getTenantStatement: async (tenantId, year, month) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/statement/${year}/${month}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to fetch tenant statement';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error fetching tenant statement:', error);
+      throw error;
+    }
+  },
+
+  // Get all active expenses for a tenant
+  getTenantExpenses: async (tenantId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/expenses`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to fetch tenant expenses';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        console.warn(`API Error (${response.status}):`, errorMessage);
+        return [];
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching tenant expenses:', error);
+      return [];
+    }
+  },
+
+  // Add a new tenant expense
+  addTenantExpense: async (tenantId, expense) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/expenses`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            expenseTypeId: expense.expenseTypeId,
+            cycleId: expense.cycleId,
+            amount: expense.amount,
+            comments: expense.comments,
+            isAlreadyPaid: expense.isAlreadyPaid || false,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to add expense';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error adding expense:', error);
+      throw error;
+    }
+  },
+
+  // Update tenant expense
+  updateTenantExpense: async (tenantId, expenseId, expense) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/expenses/${expenseId}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: expense.amount,
+            comments: expense.comments,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to update expense';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error updating expense:', error);
+      throw error;
+    }
+  },
+
+  // Retire tenant expense
+  retireTenantExpense: async (tenantId, expenseId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/expenses/${expenseId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to retire expense';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error retiring expense:', error);
+      throw error;
+    }
+  },
+
+  // Record a payment
+  recordPayment: async (tenantId, payment) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/payments`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            expenseTypeId: payment.expenseTypeId,
+            amount: payment.amount,
+            linkedExpenseId: payment.linkedExpenseId,
+            comments: payment.comments,
+            isAlreadyPaid: payment.isAlreadyPaid || false,
+            cycleId: payment.cycleId || null,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to record payment';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      throw error;
+    }
+  },
+
+  // Delete a tenant
+  deleteTenant: async (tenantId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to delete tenant';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error deleting tenant:', error);
+      throw error;
+    }
+  },
+
+  // Mark tenant as inactive (moved out)
+  markTenantAsInactive: async (tenantId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/mark-inactive`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to mark tenant as inactive';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error marking tenant as inactive:', error);
+      throw error;
+    }
+  },
 };
+

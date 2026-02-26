@@ -193,11 +193,6 @@ export default function AddTenantScreen({ navigation, route }) {
     setPickerVisible(true);
   };
 
-  const openGovernmentTypePicker = () => {
-    setPickerType('government');
-    setPickerVisible(true);
-  };
-
   const closePicker = () => {
     setPickerVisible(false);
     setPickerType(null);
@@ -211,11 +206,6 @@ export default function AddTenantScreen({ navigation, route }) {
 
   const handleSelectCycle = (cycleId) => {
     updateExpense(selectedExpenseId, 'cycleId', cycleId);
-    closePicker();
-  };
-
-  const handleSelectGovernmentType = (govTypeId) => {
-    setGovernmentTypeId(govTypeId);
     closePicker();
   };
 
@@ -533,59 +523,53 @@ export default function AddTenantScreen({ navigation, route }) {
               </Text>
             </View>
 
-            {/* Government ID Type Picker */}
-            <View
-              style={{
-                backgroundColor: 'white',
-                borderRadius: 16,
-                padding: 16,
-                marginBottom: 16,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.06,
-                shadowRadius: 6,
-                elevation: 3,
-              }}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                <Ionicons name="document-text" size={16} color="#4f39f6" />
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: '700',
-                    color: '#364153',
-                  }}
-                >
-                  ID Type
-                </Text>
+            {/* Government ID Type Buttons */}
+            {governmentIdTypes.length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+                  <Ionicons name="document-text" size={16} color="#4f39f6" />
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      fontWeight: '700',
+                      color: '#364153',
+                    }}
+                  >
+                    ID Type
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                  {governmentIdTypes.map((type) => (
+                    <TouchableOpacity
+                      key={type.governmentIdTypeId}
+                      onPress={() => {
+                        if (governmentTypeId === type.governmentIdTypeId) {
+                          setGovernmentTypeId(null);
+                        } else {
+                          setGovernmentTypeId(type.governmentIdTypeId);
+                        }
+                      }}
+                      style={{
+                        backgroundColor: governmentTypeId === type.governmentIdTypeId ? '#4f39f6' : '#f3f4f6',
+                        borderRadius: 12,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: governmentTypeId === type.governmentIdTypeId ? 'white' : '#1e2939',
+                          fontSize: 12,
+                          fontWeight: '600',
+                        }}
+                      >
+                        {type.governmentIdTypeName}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-              <TouchableOpacity
-                onPress={openGovernmentTypePicker}
-                style={{
-                  backgroundColor: '#f9fafb',
-                  borderRadius: 14,
-                  borderWidth: 1.108,
-                  borderColor: '#e5e7eb',
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 14,
-                    color: governmentTypeId ? '#1e2939' : 'rgba(10,10,10,0.5)',
-                    flex: 1,
-                  }}
-                >
-                  {governmentIdTypes.find(t => t.governmentIdTypeId === governmentTypeId)
-                    ?.governmentIdTypeName || 'Select ID type'}
-                </Text>
-                <Ionicons name="chevron-down" size={20} color="#d1d5db" />
-              </TouchableOpacity>
-            </View>
+            )}
 
             {/* Government ID Input */}
             <View
@@ -652,26 +636,7 @@ export default function AddTenantScreen({ navigation, route }) {
               Add expense details (optional)
             </Text>
 
-            {expenses.length === 0 ? (
-              <View
-                style={{
-                  paddingVertical: 30,
-                  alignItems: 'center',
-                  marginBottom: 12,
-                }}
-              >
-                <Ionicons name="receipt-outline" size={48} color="#d1d5db" />
-                <Text
-                  style={{
-                    marginTop: 12,
-                    fontSize: 14,
-                    color: '#9ca3af',
-                  }}
-                >
-                  No expenses added yet
-                </Text>
-              </View>
-            ) : (
+            {expenses.length > 0 && (
               <View style={{ marginBottom: 16 }}>
                 {expenses.map((expense, index) => (
                   <View
@@ -999,7 +964,7 @@ export default function AddTenantScreen({ navigation, route }) {
                       }}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                        <Ionicons name="document-attachment" size={13} color="#4f39f6" />
+                        <Ionicons name="document-text" size={13} color="#4f39f6" />
                         <Text
                           style={{
                             fontSize: 12,
@@ -1150,9 +1115,7 @@ export default function AddTenantScreen({ navigation, route }) {
               >
                 {pickerType === 'type'
                   ? 'Select Expense Type'
-                  : pickerType === 'cycle'
-                  ? 'Select Billing Cycle'
-                  : 'Select ID Type'}
+                  : 'Select Billing Cycle'}
               </Text>
               <TouchableOpacity onPress={closePicker}>
                 <Ionicons name="close" size={24} color="#9ca3af" />
@@ -1200,8 +1163,7 @@ export default function AddTenantScreen({ navigation, route }) {
                         )}
                     </TouchableOpacity>
                   ))
-                : pickerType === 'cycle'
-                ? expenseCycles.map((cycle) => (
+                : expenseCycles.map((cycle) => (
                     <TouchableOpacity
                       key={cycle.expenseCycleId}
                       onPress={() => handleSelectCycle(cycle.expenseCycleId)}
@@ -1232,37 +1194,6 @@ export default function AddTenantScreen({ navigation, route }) {
                             color="#4f39f6"
                           />
                         )}
-                    </TouchableOpacity>
-                  ))
-                : governmentIdTypes.map((govType) => (
-                    <TouchableOpacity
-                      key={govType.governmentIdTypeId}
-                      onPress={() => handleSelectGovernmentType(govType.governmentIdTypeId)}
-                      style={{
-                        paddingHorizontal: 16,
-                        paddingVertical: 14,
-                        borderBottomWidth: 1,
-                        borderBottomColor: '#f3f4f6',
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          color: '#1e2939',
-                        }}
-                      >
-                        {govType.governmentIdTypeName}
-                      </Text>
-                      {governmentTypeId === govType.governmentIdTypeId && (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={20}
-                          color="#4f39f6"
-                        />
-                      )}
                     </TouchableOpacity>
                   ))}
             </ScrollView>

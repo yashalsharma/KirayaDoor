@@ -17,14 +17,20 @@ import { propertyApi } from '../api/propertyApi';
 import ConfirmDialog from '../components/ConfirmDialog';
 import BottomNavigationFooter from '../components/BottomNavigationFooter';
 
-function TenantCard({ item, navigation, onDelete, onEdit }) {
+function TenantCard({ item, navigation, onDelete, onEdit, unitId, propertyId }) {
   const amountDue = item.amountDue;
   const isLoading = amountDue === null || amountDue === undefined;
   const isAmountDueZero = amountDue === 0;
 
   return (
     <TouchableOpacity
-      disabled={true}
+      onPress={() =>
+        navigation.navigate('TenantStatement', {
+          tenantId: item.tenantId,
+          unitId: unitId,
+          propertyId: propertyId,
+        })
+      }
       style={{
         backgroundColor: 'white',
         borderRadius: 16,
@@ -59,16 +65,38 @@ function TenantCard({ item, navigation, onDelete, onEdit }) {
 
         {/* Tenant Info */}
         <View style={{ flex: 1 }}>
-          <Text
-            style={{
-              fontSize: 15,
-              fontWeight: '600',
-              color: '#1e2939',
-              marginBottom: 2,
-            }}
-          >
-            {item.tenantName}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+            <Text
+              style={{
+                fontSize: 15,
+                fontWeight: '600',
+                color: '#1e2939',
+              }}
+            >
+              {item.tenantName}
+            </Text>
+            {!item.isActive && (
+              <View
+                style={{
+                  backgroundColor: '#6b7280',
+                  borderRadius: 4,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: '700',
+                    color: 'white',
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  MOVED OUT
+                </Text>
+              </View>
+            )}
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Ionicons name="call" size={12} color="#9ca3af" />
             <Text
@@ -562,6 +590,8 @@ export default function TenantsScreen({ navigation, route }) {
                   navigation={navigation}
                   onDelete={handleDeleteTenant}
                   onEdit={handleEditTenant}
+                  unitId={unitId}
+                  propertyId={propertyId}
                 />
               </View>
             );

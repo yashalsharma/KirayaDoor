@@ -28,6 +28,8 @@ builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddSingleton<IOtpCacheService, OtpCacheService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<PendingAmountService>();
+builder.Services.AddScoped<ITenantService, TenantService>();
+builder.Services.AddScoped<ITenantStatementService, TenantStatementService>();
 
 // Add Controllers
 builder.Services.AddControllers();
