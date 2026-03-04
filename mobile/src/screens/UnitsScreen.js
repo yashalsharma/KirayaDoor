@@ -21,7 +21,7 @@ import BottomNavigationFooter from '../components/BottomNavigationFooter';
 
 function UnitCard({ item, navigation, onEdit, onDelete, isEditing, editingName, onEditNameChange, onSaveEdit, onCancelEdit, isSaving }) {
   // Check if unit has any active tenant linked to it
-  const isOccupied = item.tenants && item.tenants.length > 0;
+  const isOccupied = item.tenants && item.tenants.filter(t => t.isActive).length > 0;
   const isCurrentlyEditing = isEditing;  // isEditing is already passed as boolean correctly from parent
 
   return (

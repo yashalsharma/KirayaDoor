@@ -15,6 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { propertyApi } from '../api/propertyApi';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 function EditTenantDetailsSheet({ route, navigation }) {
   const { tenantId, unitId, propertyId, initialDetails, onSuccess } = route.params;
@@ -27,6 +28,8 @@ function EditTenantDetailsSheet({ route, navigation }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [moveOutDialogVisible, setMoveOutDialogVisible] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -84,21 +87,57 @@ function EditTenantDetailsSheet({ route, navigation }) {
         governmentTypeId: governmentTypeId || null,
       });
 
-      Alert.alert('Success', 'Tenant details updated successfully', [
-        {
-          text: 'OK',
-          onPress: () => {
-            if (onSuccess) onSuccess();
-            navigation.goBack();
-          },
-        },
-      ]);
+      // Close without showing alert
+      if (onSuccess) onSuccess();
+      navigation.goBack();
     } catch (err) {
       console.error('Error updating tenant:', err);
       Alert.alert('Error', err.message || 'Failed to update tenant details');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const confirmDeleteTenant = async () => {
+    try {
+      setIsSaving(true);
+      setDeleteDialogVisible(false);
+      await propertyApi.deleteTenant(tenantId);
+      // Navigate back to the Tenants screen for this unit
+      navigation.navigate('Tenants', {
+        unitId,
+        propertyId,
+      });
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Failed to delete tenant');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const cancelDeleteTenant = () => {
+    setDeleteDialogVisible(false);
+  };
+
+  const confirmMoveOutTenant = async () => {
+    try {
+      setIsSaving(true);
+      setMoveOutDialogVisible(false);
+      await propertyApi.markTenantAsInactive(tenantId);
+      // Navigate back to the Tenants screen for this unit
+      navigation.navigate('Tenants', {
+        unitId,
+        propertyId,
+      });
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Failed to mark tenant as moved out');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const cancelMoveOutTenant = () => {
+    setMoveOutDialogVisible(false);
   };
 
   if (isLoading) {
@@ -418,34 +457,7 @@ function EditTenantDetailsSheet({ route, navigation }) {
 
           {/* Move Out Button */}
           <TouchableOpacity
-            onPress={() => {
-              Alert.alert(
-                'Confirm Move Out',
-                'Mark this tenant as moved out (inactive)?',
-                [
-                  { text: 'Cancel', onPress: () => {}, style: 'cancel' },
-                  {
-                    text: 'Move Out',
-                    onPress: async () => {
-                      try {
-                        setIsSaving(true);
-                        await propertyApi.markTenantAsInactive(tenantId);
-                        // Navigate back to the Tenants screen for this unit
-                        navigation.navigate('Tenants', {
-                          unitId,
-                          propertyId,
-                        });
-                      } catch (err) {
-                        Alert.alert('Error', err.message || 'Failed to mark tenant as moved out');
-                      } finally {
-                        setIsSaving(false);
-                      }
-                    },
-                    style: 'destructive',
-                  },
-                ]
-              );
-            }}
+            onPress={() => setMoveOutDialogVisible(true)}
             disabled={isSaving}
             style={{
               backgroundColor: '#fed7aa',
@@ -459,34 +471,7 @@ function EditTenantDetailsSheet({ route, navigation }) {
 
           {/* Delete Button */}
           <TouchableOpacity
-            onPress={() => {
-              Alert.alert(
-                'Delete Tenant',
-                'This will permanently delete this tenant and all associated records. This action cannot be undone.',
-                [
-                  { text: 'Cancel', onPress: () => {}, style: 'cancel' },
-                  {
-                    text: 'Delete',
-                    onPress: async () => {
-                      try {
-                        setIsSaving(true);
-                        await propertyApi.deleteTenant(tenantId);
-                        // Navigate back to the Tenants screen for this unit
-                        navigation.navigate('Tenants', {
-                          unitId,
-                          propertyId,
-                        });
-                      } catch (err) {
-                        Alert.alert('Error', err.message || 'Failed to delete tenant');
-                      } finally {
-                        setIsSaving(false);
-                      }
-                    },
-                    style: 'destructive',
-                  },
-                ]
-              );
-            }}
+            onPress={() => setDeleteDialogVisible(true)}
             disabled={isSaving}
             style={{
               backgroundColor: '#fecaca',
@@ -500,6 +485,29 @@ function EditTenantDetailsSheet({ route, navigation }) {
         </View>
       )}
 
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        title="Delete Tenant"
+        message="This will permanently delete this tenant and all associated records. This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDeleteTenant}
+        onCancel={cancelDeleteTenant}
+        isDangerous={true}
+      />
+
+      {/* Move Out Confirmation Dialog */}
+      <ConfirmDialog
+        visible={moveOutDialogVisible}
+        title="Confirm Move Out"
+        message="Mark this tenant as moved out (inactive)?"
+        confirmText="Move Out"
+        cancelText="Cancel"
+        onConfirm={confirmMoveOutTenant}
+        onCancel={cancelMoveOutTenant}
+        isDangerous={true}
+      />
     </LinearGradient>
   );
 }

@@ -127,12 +127,11 @@ export default function AddTenantScreen({ navigation, route }) {
             }
 
             await propertyApi.createTenantExpense(newTenant.tenantId, {
-              tenantExpenseTypeId: expense.typeId,
-              tenantExpenseCycleId: expense.cycleId,
-              tenantExpenseStartDate: formatDateToLocalString(expense.startDate),
-              tenantExpenseEndDate: formatDateToLocalString(expense.endDate),
-              tenantExpenseAmount: parseFloat(expense.amount),
+              expenseTypeId: expense.typeId,
+              cycleId: expense.cycleId,
+              amount: parseFloat(expense.amount),
               comments: expense.comments || null,
+              isAlreadyPaid: false,
             });
           } catch (expenseError) {
             console.error('Error creating expense:', expenseError);
