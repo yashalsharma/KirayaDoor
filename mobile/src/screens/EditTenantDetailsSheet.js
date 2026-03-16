@@ -50,6 +50,7 @@ function EditTenantDetailsSheet({ route, navigation }) {
   const [inlineEditCycleId, setInlineEditCycleId] = useState(null);
   const [inlineEditStartDate, setInlineEditStartDate] = useState(null);
   const [inlineEditEndDate, setInlineEditEndDate] = useState(null);
+  const [modifiedExpenses, setModifiedExpenses] = useState({}); // Track which expenses have been modified
   
   // Date Picker State
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -272,13 +273,8 @@ function EditTenantDetailsSheet({ route, navigation }) {
   // Edit existing expense - toggle inline form
   const toggleEditExistingExpense = (expense) => {
     if (expandedExpenseId === expense.tenantExpenseId) {
-      setExpandedExpenseId(null);
-      setInlineEditAmount('');
-      setInlineEditComments('');
-      setInlineEditTypeId(null);
-      setInlineEditCycleId(null);
-      setInlineEditStartDate(null);
-      setInlineEditEndDate(null);
+      // Closing the edit form - auto save
+      closeEditExistingExpense();
     } else {
       setExpandedExpenseId(expense.tenantExpenseId);
       setInlineEditAmount(expense.tenantExpenseAmount.toString());
@@ -290,7 +286,8 @@ function EditTenantDetailsSheet({ route, navigation }) {
     }
   };
 
-  const saveInlineEditExpense = async () => {
+  // Auto-save when closing an edited expense
+  const closeEditExistingExpense = async () => {
     if (!inlineEditAmount.trim()) {
       Alert.alert('Validation', 'Amount is required');
       return;
@@ -331,6 +328,10 @@ function EditTenantDetailsSheet({ route, navigation }) {
       setExpandedExpenseId(null);
       setInlineEditAmount('');
       setInlineEditComments('');
+      setInlineEditTypeId(null);
+      setInlineEditCycleId(null);
+      setInlineEditStartDate(null);
+      setInlineEditEndDate(null);
     } catch (err) {
       console.error('Error updating expense:', err);
       Alert.alert('Error', err.message || 'Failed to update expense');
@@ -460,6 +461,16 @@ function EditTenantDetailsSheet({ route, navigation }) {
           Alert.alert('Validation', 'Please select a cycle for all expenses');
           setIsAddingExpense(false);
           return;
+        }
+
+        // Check if type is 'others' and comments is mandatory
+        const expenseTypeSelected = expenseTypes.find(t => t.expenseTypeId === expense.typeId);
+        if (expenseTypeSelected?.expenseTypeName?.toLowerCase() === 'others') {
+          if (!expense.comments.trim()) {
+            Alert.alert('Validation', 'Comments are mandatory for "Others" expense type');
+            setIsAddingExpense(false);
+            return;
+          }
         }
 
         await propertyApi.addTenantExpense(tenantId, {
@@ -1095,7 +1106,7 @@ function EditTenantDetailsSheet({ route, navigation }) {
                         </View>
 
                         {/* Comments */}
-                        <View style={{ marginBottom: 10 }}>
+                        <View style={{ marginBottom: 16 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
                             <Ionicons name="document-text" size={13} color="#4f39f6" />
                             <Text
@@ -1129,46 +1140,23 @@ function EditTenantDetailsSheet({ route, navigation }) {
                           />
                         </View>
 
-                        {/* Action Buttons */}
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <TouchableOpacity
-                            onPress={saveInlineEditExpense}
-                            style={{
-                              flex: 1,
-                              backgroundColor: '#4f39f6',
-                              borderRadius: 12,
-                              paddingVertical: 12,
-                              alignItems: 'center',
-                            }}
-                          >
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: 'white' }}>Save</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={cancelInlineEditExpense}
-                            style={{
-                              flex: 1,
-                              backgroundColor: '#f3f4f6',
-                              borderRadius: 12,
-                              paddingVertical: 12,
-                              alignItems: 'center',
-                            }}
-                          >
-                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#6b7280' }}>Cancel</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => handleDeleteExistingExpense(expense)}
-                            style={{
-                              width: 44,
-                              height: 44,
-                              borderRadius: 12,
-                              backgroundColor: '#fee2e2',
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                            }}
-                          >
+                        {/* Delete Bar at Bottom */}
+                        <TouchableOpacity
+                          onPress={() => handleDeleteExistingExpense(expense)}
+                          style={{
+                            backgroundColor: '#fee2e2',
+                            borderRadius: 12,
+                            paddingVertical: 12,
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: '#fecaca',
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <Ionicons name="trash" size={16} color="#dc2626" />
-                          </TouchableOpacity>
-                        </View>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#dc2626' }}>Delete Expense</Text>
+                          </View>
+                        </TouchableOpacity>
                       </>
                     )}
                   </View>
@@ -1456,6 +1444,9 @@ function EditTenantDetailsSheet({ route, navigation }) {
                         }}
                       >
                         Comments
+                        {expenseTypes.find(t => t.expenseTypeId === expense.typeId)?.expenseTypeName?.toLowerCase() === 'others' && (
+                          <Text style={{ color: '#fb2c36' }}> *</Text>
+                        )}
                       </Text>
                     </View>
                     <TextInput
@@ -1471,7 +1462,7 @@ function EditTenantDetailsSheet({ route, navigation }) {
                         minHeight: 60,
                         textAlignVertical: 'top',
                       }}
-                      placeholder="Optional comments"
+                      placeholder="Enter comments"
                       placeholderTextColor="rgba(10,10,10,0.5)"
                       value={expense.comments}
                       onChangeText={(value) =>

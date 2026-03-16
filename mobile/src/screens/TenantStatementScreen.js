@@ -720,7 +720,10 @@ function TenantStatementScreen({ route, navigation }) {
             {/* Comments */}
             <View style={{ marginBottom: 16 }}>
               <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e2939', marginBottom: 8 }}>
-                Comments (Optional)
+                Comments
+                {expenseTypes.find(t => t.expenseTypeId === expenseTypeId)?.expenseTypeName?.toLowerCase() === 'others' && (
+                  <Text style={{ color: '#fb2c36' }}> *</Text>
+                )}
               </Text>
               <TextInput
                 style={{
@@ -857,6 +860,15 @@ function TenantStatementScreen({ route, navigation }) {
                 if (!expenseAmount.trim()) {
                   Alert.alert('Validation', 'Amount is required');
                   return;
+                }
+
+                // Check if type is 'others' and comments is mandatory
+                const expenseTypeSelected = expenseTypes.find(t => t.expenseTypeId === expenseTypeId);
+                if (expenseTypeSelected?.expenseTypeName?.toLowerCase() === 'others') {
+                  if (!expenseComments.trim()) {
+                    Alert.alert('Validation', 'Comments are mandatory for "Others" expense type');
+                    return;
+                  }
                 }
 
                 try {
