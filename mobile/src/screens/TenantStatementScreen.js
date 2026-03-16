@@ -16,6 +16,7 @@ import {
   FlatList,
   KeyboardAvoidingView,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,7 +28,7 @@ const { width } = Dimensions.get('window');
 
 function TenantStatementScreen({ route, navigation }) {
   const insets = useSafeAreaInsets();
-  const { tenantId, unitId, propertyId } = route.params;
+  const { tenantId, unitId, unitName, propertyId } = route.params;
 
   const [statement, setStatement] = useState(null);
   const [tenantDetails, setTenantDetails] = useState(null);
@@ -48,11 +49,15 @@ function TenantStatementScreen({ route, navigation }) {
   const [expenseCycles, setExpenseCycles] = useState([]);
   const [isAddingExpense, setIsAddingExpense] = useState(false);
   const [alreadyPaid, setAlreadyPaid] = useState(false);
+  const [expenseDate, setExpenseDate] = useState(new Date());
+  const [showExpenseDatePicker, setShowExpenseDatePicker] = useState(false);
 
   // Record Payment Form State
   const [paymentTypeId, setPaymentTypeId] = useState(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentComments, setPaymentComments] = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date());
+  const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
@@ -144,6 +149,48 @@ function TenantStatementScreen({ route, navigation }) {
       cycle.expenseCycleName && cycle.expenseCycleName.toLowerCase().includes('onetime')
     );
   }, [expenseCycles]);
+
+  // Handle payment date picker
+  const handlePaymentDatePicker = () => {
+    Keyboard.dismiss();
+    setShowPaymentDatePicker(true);
+  };
+
+  // Handle date change from DateTimePicker
+  const handlePaymentDateChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') {
+      setShowPaymentDatePicker(false);
+      if (selectedDate) {
+        setPaymentDate(selectedDate);
+      }
+    } else {
+      // iOS keeps picker open until user taps Done
+      if (selectedDate) {
+        setPaymentDate(selectedDate);
+      }
+    }
+  };
+
+  // Handle expense date picker
+  const handleExpenseDatePicker = () => {
+    Keyboard.dismiss();
+    setShowExpenseDatePicker(true);
+  };
+
+  // Handle expense date change from DateTimePicker
+  const handleExpenseDateChange = (event, selectedDate) => {
+    if (Platform.OS === 'android') {
+      setShowExpenseDatePicker(false);
+      if (selectedDate) {
+        setExpenseDate(selectedDate);
+      }
+    } else {
+      // iOS keeps picker open until user taps Done
+      if (selectedDate) {
+        setExpenseDate(selectedDate);
+      }
+    }
+  };
 
   const handlePreviousMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -255,15 +302,16 @@ function TenantStatementScreen({ route, navigation }) {
         {tenantDetails && (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
             <TouchableOpacity
-              onPress={() =>
+              onPress={() => {
                 navigation.navigate('EditTenantDetails', {
                   tenantId,
                   unitId,
+                  unitName: unitName || 'Unit',
                   propertyId,
                   initialDetails: tenantDetails,
                   onSuccess: fetchStatement,
-                })
-              }
+                });
+              }}
               style={{
                 backgroundColor: 'white',
                 borderRadius: 16,
@@ -695,6 +743,72 @@ function TenantStatementScreen({ route, navigation }) {
               />
             </View>
 
+            {/* Expense Date */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e2939', marginBottom: 8 }}>
+                Expense Date
+              </Text>
+              <TouchableOpacity
+                onPress={handleExpenseDatePicker}
+                style={{
+                  backgroundColor: '#f9fafb',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#e5e7eb',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text style={{ fontSize: 14, color: '#1e2939', fontWeight: '500' }}>
+                  {expenseDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </Text>
+                <Ionicons name="calendar" size={20} color="#4f39f6" />
+              </TouchableOpacity>
+
+              {/* Expense Date Picker - iOS Modal */}
+              {showExpenseDatePicker && Platform.OS === 'ios' && (
+                <Modal transparent={true} animationType="slide" onRequestClose={() => setShowExpenseDatePicker(false)}>
+                  <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.4)' }}>
+                    <TouchableOpacity
+                      style={{ flex: 1 }}
+                      onPress={() => setShowExpenseDatePicker(false)}
+                      activeOpacity={1}
+                    />
+                    <View style={{ backgroundColor: '#f3f4f6', paddingTop: 16, paddingBottom: 20 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12 }}>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#1e2939' }}>Select Date</Text>
+                        <TouchableOpacity onPress={() => setShowExpenseDatePicker(false)}>
+                          <Text style={{ fontSize: 16, color: '#4f39f6', fontWeight: '600' }}>Done</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={{ backgroundColor: 'white', paddingVertical: 10, alignItems: 'center', justifyContent: 'center' }}>
+                        <DateTimePicker
+                          value={expenseDate}
+                          mode="date"
+                          display="spinner"
+                          onChange={handleExpenseDateChange}
+                          textColor="#1e2939"
+                        />
+                      </View>
+                    </View>
+                  </View>
+                </Modal>
+              )}
+
+              {/* Expense Date Picker - Android */}
+              {showExpenseDatePicker && Platform.OS === 'android' && (
+                <DateTimePicker
+                  value={expenseDate}
+                  mode="date"
+                  display="calendar"
+                  onChange={handleExpenseDateChange}
+                />
+              )}
+            </View>
+
             {/* Already Paid Checkbox */}
             <View style={{ marginBottom: 16 }}>
               <TouchableOpacity
@@ -753,6 +867,7 @@ function TenantStatementScreen({ route, navigation }) {
                     amount: parseFloat(expenseAmount),
                     comments: expenseComments.trim() || null,
                     isAlreadyPaid: alreadyPaid,
+                    startDate: expenseDate,
                   });
                   // Close modal and refresh statement without showing alert
                   setShowAddExpenseModal(false);
@@ -761,6 +876,7 @@ function TenantStatementScreen({ route, navigation }) {
                   setExpenseAmount('');
                   setExpenseComments('');
                   setAlreadyPaid(false);
+                  setExpenseDate(new Date());
                   fetchStatement();
                 } catch (err) {
                   console.error('Error creating expense:', err);
@@ -793,6 +909,7 @@ function TenantStatementScreen({ route, navigation }) {
                 setExpenseAmount('');
                 setExpenseComments('');
                 setAlreadyPaid(false);
+                setExpenseDate(new Date());
               }}
               disabled={isAddingExpense}
               style={{
@@ -934,7 +1051,92 @@ function TenantStatementScreen({ route, navigation }) {
                 onChangeText={setPaymentComments}
               />
             </View>
+
+            {/* Payment Date Picker */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#1e2939', marginBottom: 8 }}>
+                Payment Date
+              </Text>
+              <TouchableOpacity
+                onPress={handlePaymentDatePicker}
+                style={{
+                  backgroundColor: '#f9fafb',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#e5e7eb',
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <Text style={{ fontSize: 14, color: '#1e2939', fontWeight: '500' }}>
+                  {paymentDate.toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </Text>
+                <Ionicons name="calendar" size={18} color="#4f39f6" />
+              </TouchableOpacity>
+            </View>
           </ScrollView>
+
+          {/* Date Picker Modal - rendered outside ScrollView */}
+          {showPaymentDatePicker && Platform.OS === 'ios' && (
+            <Modal
+              visible={true}
+              transparent={true}
+              animationType="slide"
+              onRequestClose={() => setShowPaymentDatePicker(false)}
+            >
+              <View style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.3)' }}>
+                <View style={{ backgroundColor: 'white', marginTop: 'auto' }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#f3f4f6',
+                    }}
+                  >
+                    <TouchableOpacity onPress={() => setShowPaymentDatePicker(false)}>
+                      <Text style={{ fontSize: 16, color: '#4f39f6', fontWeight: '600' }}>Cancel</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#1e2939' }}>Select Date</Text>
+                    <TouchableOpacity onPress={() => setShowPaymentDatePicker(false)}>
+                      <Text style={{ fontSize: 16, color: '#4f39f6', fontWeight: '600' }}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={{ backgroundColor: 'white', paddingVertical: 10, alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                    <DateTimePicker
+                      value={paymentDate}
+                      mode="date"
+                      display="spinner"
+                      onChange={handlePaymentDateChange}
+                      textColor="#1e2939"
+                    />
+                  </View>
+                </View>
+              </View>
+            </Modal>
+          )}
+
+          {/* Android Date Picker - uses native dialog */}
+          {showPaymentDatePicker && Platform.OS === 'android' && (
+            <DateTimePicker
+              value={paymentDate}
+              mode="date"
+              display="calendar"
+              onChange={handlePaymentDateChange}
+            />
+          )}
+
+
 
           {/* Modal Footer Buttons - Hide when keyboard is visible */}
           {!isKeyboardVisible && (
@@ -957,12 +1159,14 @@ function TenantStatementScreen({ route, navigation }) {
                       amount: parseFloat(paymentAmount),
                       linkedExpenseId: null,
                       comments: paymentComments.trim() || null,
+                      paymentDate: paymentDate,
                     });
                     // Close modal and refresh statement without showing alert
                     setShowRecordPaymentModal(false);
                     setPaymentTypeId(null);
                     setPaymentAmount('');
                     setPaymentComments('');
+                    setPaymentDate(new Date());
                     fetchStatement();
                   } catch (err) {
                     console.error('Error recording payment:', err);
@@ -993,6 +1197,7 @@ function TenantStatementScreen({ route, navigation }) {
                   setPaymentTypeId(null);
                   setPaymentAmount('');
                   setPaymentComments('');
+                  setPaymentDate(new Date());
                   setIsAlreadyPaid(false);
                   setAlreadyPaidCycleId(null);
                 }}

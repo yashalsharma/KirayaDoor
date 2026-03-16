@@ -382,30 +382,6 @@ export default function PropertyDetailsScreen({ navigation, route }) {
                 </View>
               </View>
 
-              {/* GPS Location Display */}
-              {gpsLocation && (
-                <View
-                  style={{
-                    backgroundColor: '#f0fdf4',
-                    borderLeftWidth: 4,
-                    borderLeftColor: '#22c55e',
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                    borderRadius: 8,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: '#16a34a',
-                      fontWeight: '500',
-                    }}
-                  >
-                    📍 GPS Location Set: {gpsLocation}
-                  </Text>
-                </View>
-              )}
-
               {/* Use Location Button */}
               <TouchableOpacity
                 onPress={handleUseLocation}

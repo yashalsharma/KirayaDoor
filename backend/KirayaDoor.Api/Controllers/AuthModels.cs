@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace KirayaDoor.Api.Controllers
 {
     public class SendOtpRequest
@@ -36,9 +38,16 @@ namespace KirayaDoor.Api.Controllers
 
     public class UpdateTenantDetailsRequest
     {
+        [JsonPropertyName("tenantName")]
         public required string TenantName { get; set; }
+        
+        [JsonPropertyName("tenantContactNumber")]
         public required string TenantContactNumber { get; set; }
+        
+        [JsonPropertyName("governmentId")]
         public string? GovernmentId { get; set; }
+        
+        [JsonPropertyName("governmentTypeId")]
         public int? GovernmentTypeId { get; set; }
     }
 
@@ -78,16 +87,46 @@ namespace KirayaDoor.Api.Controllers
 
     public class AddTenantExpenseRequest
     {
+        [JsonPropertyName("expenseTypeId")]
         public required int ExpenseTypeId { get; set; }
+        
+        [JsonPropertyName("cycleId")]
         public required int CycleId { get; set; }
+        
+        [JsonPropertyName("amount")]
         public required decimal Amount { get; set; }
+        
+        [JsonPropertyName("startDate")]
+        public DateTime? StartDate { get; set; }
+        
+        [JsonPropertyName("endDate")]
+        public DateTime? EndDate { get; set; }
+        
+        [JsonPropertyName("comments")]
         public string? Comments { get; set; }
+        
+        [JsonPropertyName("isAlreadyPaid")]
         public bool IsAlreadyPaid { get; set; }
     }
 
     public class UpdateTenantExpenseRequest
     {
+        [JsonPropertyName("expenseTypeId")]
+        public int? ExpenseTypeId { get; set; }
+        
+        [JsonPropertyName("cycleId")]
+        public int? CycleId { get; set; }
+        
+        [JsonPropertyName("amount")]
         public required decimal Amount { get; set; }
+        
+        [JsonPropertyName("startDate")]
+        public DateTime? StartDate { get; set; }
+        
+        [JsonPropertyName("endDate")]
+        public DateTime? EndDate { get; set; }
+        
+        [JsonPropertyName("comments")]
         public string? Comments { get; set; }
     }
 
@@ -107,11 +146,25 @@ namespace KirayaDoor.Api.Controllers
 
     public class RecordPaymentRequest
     {
+        [JsonPropertyName("expenseTypeId")]
         public required int ExpenseTypeId { get; set; }
+        
+        [JsonPropertyName("amount")]
         public required decimal Amount { get; set; }
+        
+        [JsonPropertyName("linkedExpenseId")]
         public int? LinkedExpenseId { get; set; }
+        
+        [JsonPropertyName("comments")]
         public string? Comments { get; set; }
+        
+        [JsonPropertyName("isAlreadyPaid")]
         public bool IsAlreadyPaid { get; set; } = false;
+        
+        [JsonPropertyName("cycleId")]
         public int? CycleId { get; set; }
+        
+        [JsonPropertyName("paymentDate")]
+        public DateTime? PaymentDate { get; set; }
     }
 }

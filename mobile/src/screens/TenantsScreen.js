@@ -17,7 +17,7 @@ import { propertyApi } from '../api/propertyApi';
 import ConfirmDialog from '../components/ConfirmDialog';
 import BottomNavigationFooter from '../components/BottomNavigationFooter';
 
-function TenantCard({ item, navigation, onDelete, onEdit, unitId, propertyId }) {
+function TenantCard({ item, navigation, onDelete, onEdit, unitId, unitName, propertyId }) {
   const amountDue = item.amountDue;
   const isLoading = amountDue === null || amountDue === undefined;
   const isAmountDueZero = amountDue === 0;
@@ -28,6 +28,7 @@ function TenantCard({ item, navigation, onDelete, onEdit, unitId, propertyId }) 
         navigation.navigate('TenantStatement', {
           tenantId: item.tenantId,
           unitId: unitId,
+          unitName: unitName,
           propertyId: propertyId,
         })
       }
@@ -591,6 +592,7 @@ export default function TenantsScreen({ navigation, route }) {
                   onDelete={handleDeleteTenant}
                   onEdit={handleEditTenant}
                   unitId={unitId}
+                  unitName={unitName}
                   propertyId={propertyId}
                 />
               </View>
@@ -605,21 +607,6 @@ export default function TenantsScreen({ navigation, route }) {
             paddingVertical: 12,
           }}
           ListFooterComponent={<AddTenantCard onPress={handleAddTenant} isLoading={isAddingTenant} />}
-          ListEmptyComponent={
-            <View style={{ alignItems: 'center', marginTop: 40 }}>
-              <Ionicons name="person-outline" size={60} color="#d1d5db" />
-              <Text 
-                style={{
-                  fontSize: 16,
-                  fontWeight: '600',
-                  color: '#9ca3af',
-                  marginTop: 12,
-                }}
-              >
-                No tenants yet
-              </Text>
-            </View>
-          }
         />
       </Pressable>
 

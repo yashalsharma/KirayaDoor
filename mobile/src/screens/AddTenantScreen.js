@@ -104,6 +104,10 @@ export default function AddTenantScreen({ navigation, route }) {
       Alert.alert('Error', 'Please enter contact number');
       return;
     }
+    if (!/^\d{10}$/.test(tenantContactNumber.trim())) {
+      Alert.alert('Error', 'Contact number must be exactly 10 digits');
+      return;
+    }
 
     try {
       setLoading(true);

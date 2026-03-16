@@ -525,7 +525,7 @@ export const propertyApi = {
   },
 
   // Create a new tenant
-  createTenant: async (unitId, { tenantName, tenantContactNumber }) => {
+  createTenant: async (unitId, { tenantName, tenantContactNumber, governmentId, governmentTypeId }) => {
     try {
       const response = await fetch(
         `${API_BASE_URL}/properties/units/${unitId}/tenants`,
@@ -537,6 +537,8 @@ export const propertyApi = {
           body: JSON.stringify({
             tenantName,
             tenantContactNumber,
+            governmentId: governmentId || null,
+            governmentTypeId: governmentTypeId || null,
           }),
         }
       );
@@ -913,6 +915,16 @@ export const propertyApi = {
   // Add a new tenant expense
   addTenantExpense: async (tenantId, expense) => {
     try {
+      // Format dates as local date strings (YYYY-MM-DD) to avoid timezone conversion
+      const formatLocalDate = (date) => {
+        if (!date) return null;
+        const d = date instanceof Date ? date : new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
       const response = await fetch(
         `${API_BASE_URL}/properties/tenants/${tenantId}/expenses`,
         {
@@ -924,6 +936,8 @@ export const propertyApi = {
             expenseTypeId: expense.expenseTypeId,
             cycleId: expense.cycleId,
             amount: expense.amount,
+            startDate: formatLocalDate(expense.startDate),
+            endDate: formatLocalDate(expense.endDate),
             comments: expense.comments,
             isAlreadyPaid: expense.isAlreadyPaid || false,
           }),
@@ -958,6 +972,16 @@ export const propertyApi = {
   // Update tenant expense
   updateTenantExpense: async (tenantId, expenseId, expense) => {
     try {
+      // Format dates as local date strings (YYYY-MM-DD) to avoid timezone conversion
+      const formatLocalDate = (date) => {
+        if (!date) return null;
+        const d = date instanceof Date ? date : new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
       const response = await fetch(
         `${API_BASE_URL}/properties/tenants/${tenantId}/expenses/${expenseId}`,
         {
@@ -966,11 +990,17 @@ export const propertyApi = {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            expenseTypeId: expense.typeId || null,
+            cycleId: expense.cycleId || null,
             amount: expense.amount,
+            startDate: formatLocalDate(expense.startDate),
+            endDate: formatLocalDate(expense.endDate),
             comments: expense.comments,
           }),
         }
       );
+      
+
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -1032,6 +1062,16 @@ export const propertyApi = {
   // Record a payment
   recordPayment: async (tenantId, payment) => {
     try {
+      // Format date as local date string (YYYY-MM-DD) to avoid timezone conversion
+      const formatLocalDate = (date) => {
+        if (!date) return null;
+        const d = date instanceof Date ? date : new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
       const response = await fetch(
         `${API_BASE_URL}/properties/tenants/${tenantId}/payments`,
         {
@@ -1046,6 +1086,7 @@ export const propertyApi = {
             comments: payment.comments,
             isAlreadyPaid: payment.isAlreadyPaid || false,
             cycleId: payment.cycleId || null,
+            paymentDate: formatLocalDate(payment.paymentDate),
           }),
         }
       );

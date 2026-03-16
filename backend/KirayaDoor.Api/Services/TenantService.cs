@@ -50,13 +50,18 @@ namespace KirayaDoor.Api.Services
         {
             try
             {
+                if (tenantId <= 0)
+                {
+                    _logger.LogWarning($"Invalid tenant ID for update: {tenantId}");
+                    return null;
+                }
+
                 var tenant = await _context.Tenants
-                    .Where(t => t.TenantId == tenantId && t.IsActive)
-                    .FirstOrDefaultAsync();
+                    .FirstOrDefaultAsync(t => t.TenantId == tenantId);
 
                 if (tenant == null)
                 {
-                    _logger.LogWarning($"Tenant not found for update: {tenantId}");
+                    _logger.LogWarning($"Tenant not found in database: {tenantId}");
                     return null;
                 }
 

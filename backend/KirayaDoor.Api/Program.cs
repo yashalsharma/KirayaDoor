@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using KirayaDoor.Api.Data;
 using KirayaDoor.Api.Services;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,8 +33,15 @@ builder.Services.AddScoped<PendingAmountService>();
 builder.Services.AddScoped<ITenantService, TenantService>();
 builder.Services.AddScoped<ITenantStatementService, TenantStatementService>();
 
-// Add Controllers
-builder.Services.AddControllers();
+// Add Controllers with JSON options
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+        // Ensure DateTime values are properly deserialized
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+    });
 
 var app = builder.Build();
 

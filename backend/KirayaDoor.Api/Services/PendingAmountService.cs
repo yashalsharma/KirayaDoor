@@ -228,10 +228,10 @@ namespace KirayaDoor.Api.Services
                 return 0;
 
             // Calculate how many complete cycles are due
-            int cyclesDue = CalculateCyclesDue(expense, DateTime.UtcNow);
+            int cyclesDue = CalculateCyclesDue(expense, DateTime.Today);
 
             // Calculate pro-rata amount for partial cycle
-            decimal proRataAmount = CalculateProRataAmount(expense, DateTime.UtcNow);
+            decimal proRataAmount = CalculateProRataAmount(expense, DateTime.Today);
 
             // Calculate total expected amount
             decimal expectedAmount = (cyclesDue * expense.TenantExpenseAmount) + proRataAmount;
@@ -249,24 +249,75 @@ namespace KirayaDoor.Api.Services
         /// </summary>
         public async Task<decimal> CalculateTenantPendingAmountAsync(int tenantId)
         {
-            var tenantExpenses = await _context.TenantExpenses
+            // Get all tenant expenses
+            var allExpenses = await _context.TenantExpenses
                 .Where(te => te.TenantId == tenantId)
-                .Include(te => te.PaidExpenses)
                 .Include(te => te.ExpenseCycle)
+                .Include(te => te.PaidExpenses)
                 .ToListAsync();
 
-            decimal totalPending = 0;
+            // Get all payments for this tenant
+            var allPayments = await _context.PaidExpenses
+                .Where(pe => pe.TenantId == tenantId)
+                .ToListAsync();
 
-            foreach (var expense in tenantExpenses)
+            decimal totalAllExpected = 0m;
+            decimal totalAllPaid = 0m;
+
+            // Calculate total expected from all expenses (matching TenantStatementService logic)
+            foreach (var expense in allExpenses)
             {
-                int cyclesDue = CalculateCyclesDue(expense, DateTime.UtcNow);
-                decimal proRataAmount = CalculateProRataAmount(expense, DateTime.UtcNow);
-                decimal expectedAmount = (cyclesDue * expense.TenantExpenseAmount) + proRataAmount;
-                decimal totalPaid = expense.PaidExpenses?.Sum(pe => pe.PaymentAmount) ?? 0;
-                totalPending += Math.Max(0, expectedAmount - totalPaid);
+                var cycleName = expense.ExpenseCycle?.ExpenseCycleName?.ToLower() ?? "monthly";
+                var expenseEndDate = expense.TenantExpenseEndDate ?? DateTime.MaxValue;
+
+                if (cycleName.Contains("onetime"))
+                {
+                    if (expense.TenantExpenseStartDate <= DateTime.Today)
+                        totalAllExpected += expense.TenantExpenseAmount;
+                }
+                else if (cycleName.Contains("month"))
+                {
+                    var currentDate = expense.TenantExpenseStartDate;
+                    while (currentDate <= DateTime.Today && currentDate <= expenseEndDate)
+                    {
+                        totalAllExpected += expense.TenantExpenseAmount;
+                        currentDate = currentDate.AddMonths(1);
+                    }
+                }
+                else if (cycleName.Contains("quarter"))
+                {
+                    var currentDate = expense.TenantExpenseStartDate;
+                    while (currentDate <= DateTime.Today && currentDate <= expenseEndDate)
+                    {
+                        totalAllExpected += expense.TenantExpenseAmount;
+                        currentDate = currentDate.AddMonths(3);
+                    }
+                }
+                else if (cycleName.Contains("halfyear") || cycleName.Contains("half-year") || cycleName.Contains("semi"))
+                {
+                    var currentDate = expense.TenantExpenseStartDate;
+                    while (currentDate <= DateTime.Today && currentDate <= expenseEndDate)
+                    {
+                        totalAllExpected += expense.TenantExpenseAmount;
+                        currentDate = currentDate.AddMonths(6);
+                    }
+                }
+                else if (cycleName.Contains("annual") || cycleName.Contains("yearly"))
+                {
+                    var currentDate = expense.TenantExpenseStartDate;
+                    while (currentDate <= DateTime.Today && currentDate <= expenseEndDate)
+                    {
+                        totalAllExpected += expense.TenantExpenseAmount;
+                        currentDate = currentDate.AddYears(1);
+                    }
+                }
             }
 
-            return totalPending;
+            // Sum all payments
+            totalAllPaid = allPayments.Sum(p => p.PaymentAmount);
+
+            // Return pending amount (expected - paid)
+            return Math.Max(0, totalAllExpected - totalAllPaid);
         }
 
         /// <summary>

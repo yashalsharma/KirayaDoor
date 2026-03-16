@@ -49,9 +49,12 @@ namespace KirayaDoor.Api.Services
                 var monthEnd = statementDate.AddMonths(1).AddDays(-1);
 
                 // Get all active expenses for this tenant
+                // Include expenses that:
+                // - Have no end date (ongoing), OR
+                // - Have an end date AFTER the start of this month
                 var activeExpenses = await _context.TenantExpenses
                     .Where(te => te.TenantId == tenantId && 
-                           (te.TenantExpenseEndDate == null || te.TenantExpenseEndDate >= statementDate))
+                           (te.TenantExpenseEndDate == null || te.TenantExpenseEndDate > statementDate))
                     .Include(te => te.ExpenseType)
                     .Include(te => te.ExpenseCycle)
                     .OrderBy(te => te.TenantExpenseStartDate)
@@ -222,8 +225,10 @@ namespace KirayaDoor.Api.Services
         {
             try
             {
+                // Get all tenant expenses - including those with end dates set
+                // Expenses are shown in the UI where users can set/manage end dates
                 var activeExpenses = await _context.TenantExpenses
-                    .Where(te => te.TenantId == tenantId && te.TenantExpenseEndDate == null)
+                    .Where(te => te.TenantId == tenantId)
                     .Include(te => te.ExpenseType)
                     .Include(te => te.ExpenseCycle)
                     .OrderBy(te => te.TenantExpenseStartDate)
@@ -271,7 +276,8 @@ namespace KirayaDoor.Api.Services
                     TenantId = tenantId,
                     TenantExpenseTypeId = request.ExpenseTypeId,
                     TenantExpenseCycleId = request.CycleId,
-                    TenantExpenseStartDate = DateTime.Today,
+                    TenantExpenseStartDate = request.StartDate ?? DateTime.Today,
+                    TenantExpenseEndDate = request.EndDate,
                     TenantExpenseAmount = request.Amount,
                     Comments = request.Comments
                 };
@@ -338,6 +344,14 @@ namespace KirayaDoor.Api.Services
                 }
 
                 expense.TenantExpenseAmount = request.Amount;
+                if (request.ExpenseTypeId.HasValue)
+                    expense.TenantExpenseTypeId = request.ExpenseTypeId.Value;
+                if (request.CycleId.HasValue)
+                    expense.TenantExpenseCycleId = request.CycleId.Value;
+                if (request.StartDate.HasValue)
+                    expense.TenantExpenseStartDate = request.StartDate.Value;
+                if (request.EndDate.HasValue)
+                    expense.TenantExpenseEndDate = request.EndDate.Value;
                 expense.Comments = request.Comments;
 
                 await _context.SaveChangesAsync();
@@ -372,16 +386,16 @@ namespace KirayaDoor.Api.Services
                 if (expense == null)
                     return false;
 
-                // Set end date to today
-                expense.TenantExpenseEndDate = DateTime.Today;
+                // Delete the expense from database
+                _context.TenantExpenses.Remove(expense);
                 await _context.SaveChangesAsync();
 
-                _logger.LogInformation($"Expense retired: {tenantExpenseId}");
+                _logger.LogInformation($"Expense deleted: {tenantExpenseId}");
                 return true;
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error retiring expense: {ex.Message}");
+                _logger.LogError($"Error deleting expense: {ex.Message}");
                 throw;
             }
         }
@@ -433,7 +447,7 @@ namespace KirayaDoor.Api.Services
                     TenantId = tenantId,
                     ExpenseTypeId = request.ExpenseTypeId,
                     TenantExpenseId = linkedExpenseId,
-                    PaymentDate = DateTime.Today,
+                    PaymentDate = request.PaymentDate?.Date ?? DateTime.Today,
                     PaymentAmount = request.Amount,
                     Comments = request.Comments
                 };
@@ -497,7 +511,8 @@ namespace KirayaDoor.Api.Services
                 var dateCheck = isAdvancePayment ? monthEnd : today;
                 if (expense.TenantExpenseStartDate >= monthStart && 
                     expense.TenantExpenseStartDate <= monthEnd &&
-                    expense.TenantExpenseStartDate <= dateCheck)
+                    expense.TenantExpenseStartDate <= dateCheck &&
+                    (expense.TenantExpenseEndDate == null || expense.TenantExpenseStartDate <= expense.TenantExpenseEndDate))
                 {
                     dueDates.Add(expense.TenantExpenseStartDate);
                 }
@@ -507,7 +522,8 @@ namespace KirayaDoor.Api.Services
                 // Monthly: start date and each anniversary
                 var currentDate = expense.TenantExpenseStartDate;
                 var dateCheck = isAdvancePayment ? monthEnd : today;
-                while (currentDate <= monthEnd && currentDate <= dateCheck)
+                while (currentDate <= monthEnd && currentDate <= dateCheck && 
+                       (expense.TenantExpenseEndDate == null || currentDate <= expense.TenantExpenseEndDate))
                 {
                     if (currentDate >= monthStart)
                     {
@@ -521,7 +537,8 @@ namespace KirayaDoor.Api.Services
                 // Quarterly: every 3 months
                 var currentDate = expense.TenantExpenseStartDate;
                 var dateCheck = isAdvancePayment ? monthEnd : today;
-                while (currentDate <= monthEnd && currentDate <= dateCheck)
+                while (currentDate <= monthEnd && currentDate <= dateCheck &&
+                       (expense.TenantExpenseEndDate == null || currentDate <= expense.TenantExpenseEndDate))
                 {
                     if (currentDate >= monthStart)
                     {
@@ -535,7 +552,8 @@ namespace KirayaDoor.Api.Services
                 // Semi-annual: every 6 months
                 var currentDate = expense.TenantExpenseStartDate;
                 var dateCheck = isAdvancePayment ? monthEnd : today;
-                while (currentDate <= monthEnd && currentDate <= dateCheck)
+                while (currentDate <= monthEnd && currentDate <= dateCheck &&
+                       (expense.TenantExpenseEndDate == null || currentDate <= expense.TenantExpenseEndDate))
                 {
                     if (currentDate >= monthStart)
                     {
@@ -549,7 +567,8 @@ namespace KirayaDoor.Api.Services
                 // Annual: every 12 months
                 var currentDate = expense.TenantExpenseStartDate;
                 var dateCheck = isAdvancePayment ? monthEnd : today;
-                while (currentDate <= monthEnd && currentDate <= dateCheck)
+                while (currentDate <= monthEnd && currentDate <= dateCheck &&
+                       (expense.TenantExpenseEndDate == null || currentDate <= expense.TenantExpenseEndDate))
                 {
                     if (currentDate >= monthStart)
                     {

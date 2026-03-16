@@ -13,12 +13,14 @@ namespace KirayaDoor.Api.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ITenantService _tenantService;
         private readonly ITenantStatementService _tenantStatementService;
+        private readonly ILogger<PropertiesController> _logger;
 
-        public PropertiesController(ApplicationDbContext context, ITenantService tenantService, ITenantStatementService tenantStatementService)
+        public PropertiesController(ApplicationDbContext context, ITenantService tenantService, ITenantStatementService tenantStatementService, ILogger<PropertiesController> logger)
         {
             _context = context;
             _tenantService = tenantService;
             _tenantStatementService = tenantStatementService;
+            _logger = logger;
         }
 
         // GET: api/properties/owner/{userId}
