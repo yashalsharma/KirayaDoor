@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { propertyApi } from '../api/propertyApi';
+import ExpenseForm from '../components/ExpenseForm';
 
 export default function AddTenantScreen({ navigation, route }) {
   const { unitId, unitName, propertyId } = route.params || {};
@@ -157,6 +158,37 @@ export default function AddTenantScreen({ navigation, route }) {
     navigation.goBack();
   };
 
+  // Helper function to determine if expense type requires OneTime cycle
+  const isOneTimeCycleRequired = (expenseTypeId) => {
+    // SecurityDeposit (2), Electricity (3), Water (4) - must be OneTime
+    return expenseTypeId === 2 || expenseTypeId === 3 || expenseTypeId === 4;
+  };
+
+  // Helper function to determine if expense type requires Month cycle
+  const isMonthCycleRequired = (expenseTypeId) => {
+    // Rent (1) - must be Month
+    return expenseTypeId === 1;
+  };
+
+  // Helper function to check if comment is mandatory for expense type
+  const isCommentMandatory = (expenseTypeId) => {
+    // Others (100) - comment is mandatory
+    return expenseTypeId === 100;
+  };
+
+  // Get the enforced cycle ID for an expense type
+  const getEnforcedCycleId = (expenseTypeId) => {
+    // Rent (1) -> Month (2), Everything else -> OneTime (1)
+    if (expenseTypeId === 1) return 2; // Rent -> Month
+    return 1; // Everything else -> OneTime
+  };
+
+  const getTodayIST = () => {
+    const now = new Date();
+    // Create a date normalized to just the date portion (no time)
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  };
+
   const addExpense = () => {
     setExpenses([
       ...expenses,
@@ -178,9 +210,17 @@ export default function AddTenantScreen({ navigation, route }) {
 
   const updateExpense = (id, field, value) => {
     setExpenses(
-      expenses.map(e =>
-        e.id === id ? { ...e, [field]: value } : e
-      )
+      expenses.map(e => {
+        if (e.id === id) {
+          const updated = { ...e, [field]: value };
+          // If typeId is being updated, also auto-set the cycleId
+          if (field === 'typeId') {
+            updated.cycleId = getEnforcedCycleId(value);
+          }
+          return updated;
+        }
+        return e;
+      })
     );
   };
 
@@ -190,11 +230,12 @@ export default function AddTenantScreen({ navigation, route }) {
     setPickerVisible(true);
   };
 
-  const openCyclePicker = (expenseId) => {
-    setSelectedExpenseId(expenseId);
-    setPickerType('cycle');
-    setPickerVisible(true);
-  };
+  // Cycle picker removed - cycle is now auto-determined based on type
+  // const openCyclePicker = (expenseId) => {
+  //   setSelectedExpenseId(expenseId);
+  //   setPickerType('cycle');
+  //   setPickerVisible(true);
+  // };
 
   const closePicker = () => {
     setPickerVisible(false);
@@ -203,7 +244,9 @@ export default function AddTenantScreen({ navigation, route }) {
   };
 
   const handleSelectType = (typeId) => {
+    const cycleId = getEnforcedCycleId(typeId);
     updateExpense(selectedExpenseId, 'typeId', typeId);
+    updateExpense(selectedExpenseId, 'cycleId', cycleId);
     closePicker();
   };
 
@@ -642,365 +685,25 @@ export default function AddTenantScreen({ navigation, route }) {
             {expenses.length > 0 && (
               <View style={{ marginBottom: 16 }}>
                 {expenses.map((expense, index) => (
-                  <View
+                  <ExpenseForm
                     key={expense.id}
-                    style={{
-                      backgroundColor: 'white',
-                      borderRadius: 12,
-                      padding: 14,
-                      marginBottom: 12,
-                      borderWidth: 1,
-                      borderColor: '#e5e7eb',
-                    }}
-                  >
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 12,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontWeight: '600',
-                          color: '#6b7280',
-                        }}
-                      >
-                        Expense {index + 1}
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => removeExpense(expense.id)}
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: 16,
-                          backgroundColor: '#fee2e2',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Ionicons name="trash" size={14} color="#dc2626" />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Amount */}
-                    <View style={{ marginBottom: 10 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                            <Ionicons name="cash" size={14} color="#4f39f6" />
-                            <Text
-                              style={{
-                                fontSize: 13,
-                                fontWeight: '700',
-                                color: '#364153',
-                              }}
-                            >
-                              Amount
-                              <Text style={{ color: '#fb2c36' }}> *</Text>
-                            </Text>
-                          </View>
-                      <TextInput
-                        style={{
-                          backgroundColor: '#f9fafb',
-                          borderRadius: 12,
-                          borderWidth: 1.108,
-                          borderColor: '#e5e7eb',
-                          paddingHorizontal: 14,
-                          paddingVertical: 10,
-                          fontSize: 13,
-                          color: '#1e2939',
-                        }}
-                        placeholder="Enter amount (₹)"
-                        placeholderTextColor="rgba(10,10,10,0.5)"
-                        value={expense.amount}
-                        onChangeText={(value) =>
-                          updateExpense(expense.id, 'amount', value)
-                        }
-                        keyboardType="decimal-pad"
-                      />
-                    </View>
-
-                    {/* Type & Cycle */}
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        gap: 10,
-                        marginBottom: 10,
-                      }}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                          <Ionicons name="pricetag" size={13} color="#4f39f6" />
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              fontWeight: '700',
-                              color: '#364153',
-                            }}
-                          >
-                            Type
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => openTypePicker(expense.id)}
-                          style={{
-                            backgroundColor: '#f9fafb',
-                            borderRadius: 12,
-                            paddingHorizontal: 14,
-                            paddingVertical: 10,
-                            borderWidth: 1.108,
-                            borderColor: '#e5e7eb',
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              color: expense.typeId ? '#1e2939' : 'rgba(10,10,10,0.5)',
-                              flex: 1,
-                            }}
-                          >
-                            {expenseTypes.find(t => t.expenseTypeId === expense.typeId)
-                              ?.expenseTypeName || 'Select type'}
-                          </Text>
-                          <Ionicons name="chevron-down" size={16} color="#d1d5db" />
-                        </TouchableOpacity>
-                      </View>
-
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                          <Ionicons name="calendar" size={13} color="#4f39f6" />
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              fontWeight: '700',
-                              color: '#364153',
-                            }}
-                          >
-                            Cycle
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => openCyclePicker(expense.id)}
-                          style={{
-                            backgroundColor: '#f9fafb',
-                            borderRadius: 12,
-                            paddingHorizontal: 14,
-                            paddingVertical: 10,
-                            borderWidth: 1.108,
-                            borderColor: '#e5e7eb',
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              color: expense.cycleId ? '#1e2939' : 'rgba(10,10,10,0.5)',
-                              flex: 1,
-                            }}
-                          >
-                            {expenseCycles.find(c => c.expenseCycleId === expense.cycleId)
-                              ?.expenseCycleName || 'Select cycle'}
-                          </Text>
-                          <Ionicons name="chevron-down" size={16} color="#d1d5db" />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    {/* Start Date & End Date */}
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        gap: 10,
-                        marginBottom: 10,
-                      }}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                          <Ionicons name="calendar" size={13} color="#4f39f6" />
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              fontWeight: '700',
-                              color: '#364153',
-                            }}
-                          >
-                            Start Date
-                            <Text style={{ color: '#fb2c36' }}> *</Text>
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => openStartDatePicker(expense.id)}
-                          style={{
-                            backgroundColor: '#f9fafb',
-                            borderRadius: 12,
-                            paddingHorizontal: 14,
-                            paddingVertical: 10,
-                            borderWidth: 1.108,
-                            borderColor: '#e5e7eb',
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 12,
-                              color: expense.startDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
-                              flex: 1,
-                            }}
-                          >
-                            {formatDateForDisplay(expense.startDate)}
-                          </Text>
-                          <Ionicons name="chevron-down" size={16} color="#d1d5db" />
-                        </TouchableOpacity>
-                      </View>
-
-                      {!isOneTimeCycle(expense.cycleId) && (
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                            <Ionicons name="calendar" size={13} color="#4f39f6" />
-                            <Text
-                              style={{
-                                fontSize: 12,
-                                fontWeight: '700',
-                                color: '#364153',
-                              }}
-                            >
-                              End Date
-                            </Text>
-                          </View>
-                          <TouchableOpacity
-                            onPress={() => openEndDatePicker(expense.id)}
-                            style={{
-                              backgroundColor: '#f9fafb',
-                              borderRadius: 12,
-                              paddingHorizontal: 14,
-                              paddingVertical: 10,
-                              borderWidth: 1.108,
-                              borderColor: '#e5e7eb',
-                              flexDirection: 'row',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <Text
-                              style={{
-                                fontSize: 12,
-                                color: expense.endDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
-                                flex: 1,
-                              }}
-                            >
-                              {formatDateForDisplay(expense.endDate)}
-                            </Text>
-                            <Ionicons name="chevron-down" size={16} color="#d1d5db" />
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                      {isOneTimeCycle(expense.cycleId) && (
-                        <View style={{ flex: 1 }}>
-                          <View
-                            style={{
-                              backgroundColor: 'white',
-                              borderRadius: 14,
-                              padding: 14,
-                              shadowColor: '#000',
-                              shadowOffset: { width: 0, height: 2 },
-                              shadowOpacity: 0.04,
-                              shadowRadius: 4,
-                              elevation: 2,
-                            }}
-                          >
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                              <Ionicons name="calendar" size={13} color="#d1d5db" />
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: '700',
-                                  color: '#d1d5db',
-                                }}
-                              >
-                                End Date
-                              </Text>
-                            </View>
-                            <View
-                              style={{
-                                backgroundColor: '#f3f4f6',
-                                borderRadius: 12,
-                                paddingHorizontal: 14,
-                                paddingVertical: 10,
-                                borderWidth: 1.108,
-                                borderColor: '#e5e7eb',
-                                opacity: 0.6,
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  color: '#9ca3af',
-                                }}
-                              >
-                                Not applicable
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Comments */}
-                    <View
-                      style={{
-                        backgroundColor: 'white',
-                        borderRadius: 14,
-                        padding: 14,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.04,
-                        shadowRadius: 4,
-                        elevation: 2,
-                      }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                        <Ionicons name="document-text" size={13} color="#4f39f6" />
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: '700',
-                            color: '#364153',
-                          }}
-                        >
-                          Comments
-                        </Text>
-                      </View>
-                      <TextInput
-                        style={{
-                          backgroundColor: '#f9fafb',
-                          borderRadius: 12,
-                          borderWidth: 1.108,
-                          borderColor: '#e5e7eb',
-                          paddingHorizontal: 14,
-                          paddingVertical: 10,
-                          fontSize: 13,
-                          color: '#1e2939',
-                          minHeight: 80,
-                          textAlignVertical: 'top',
-                        }}
-                        placeholder="Add any comments here"
-                        placeholderTextColor="rgba(10,10,10,0.5)"
-                        value={expense.comments}
-                        onChangeText={(value) =>
-                          updateExpense(expense.id, 'comments', value)
-                        }
-                        multiline
-                      />
-                    </View>
-                  </View>
+                    expense={expense}
+                    isExistingExpense={false}
+                    isExpanded={true}
+                    onToggleExpand={() => {}}
+                    onUpdate={updateExpense}
+                    onRemove={removeExpense}
+                    expenseTypes={expenseTypes}
+                    expenseCycles={expenseCycles}
+                    indexLabel={`Expense ${index + 1}`}
+                    // Props for direct expense object properties
+                    typeId={expense.typeId}
+                    amount={expense.amount}
+                    cycleId={expense.cycleId}
+                    startDate={expense.startDate}
+                    endDate={expense.endDate}
+                    comments={expense.comments}
+                  />
                 ))}
               </View>
             )}
@@ -1116,89 +819,53 @@ export default function AddTenantScreen({ navigation, route }) {
                   color: '#1e2939',
                 }}
               >
-                {pickerType === 'type'
-                  ? 'Select Expense Type'
-                  : 'Select Billing Cycle'}
+                Select Expense Type
               </Text>
               <TouchableOpacity onPress={closePicker}>
                 <Ionicons name="close" size={24} color="#9ca3af" />
               </TouchableOpacity>
             </View>
 
-            {/* Options */}
+            {/* Expense Type Options */}
             <ScrollView
               contentContainerStyle={{
                 paddingVertical: 12,
               }}
               showsVerticalScrollIndicator={false}
             >
-              {pickerType === 'type'
-                ? expenseTypes.map((type) => (
-                    <TouchableOpacity
-                      key={type.expenseTypeId}
-                      onPress={() => handleSelectType(type.expenseTypeId)}
-                      style={{
-                        paddingHorizontal: 16,
-                        paddingVertical: 14,
-                        borderBottomWidth: 1,
-                        borderBottomColor: '#f3f4f6',
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          color: '#1e2939',
-                        }}
-                      >
-                        {type.expenseTypeName}
-                      </Text>
-                      {selectedExpenseId &&
-                        expenses.find(e => e.id === selectedExpenseId)?.typeId ===
-                          type.expenseTypeId && (
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={20}
-                            color="#4f39f6"
-                          />
-                        )}
-                    </TouchableOpacity>
-                  ))
-                : expenseCycles.map((cycle) => (
-                    <TouchableOpacity
-                      key={cycle.expenseCycleId}
-                      onPress={() => handleSelectCycle(cycle.expenseCycleId)}
-                      style={{
-                        paddingHorizontal: 16,
-                        paddingVertical: 14,
-                        borderBottomWidth: 1,
-                        borderBottomColor: '#f3f4f6',
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          color: '#1e2939',
-                        }}
-                      >
-                        {cycle.expenseCycleName}
-                      </Text>
-                      {selectedExpenseId &&
-                        expenses.find(e => e.id === selectedExpenseId)?.cycleId ===
-                          cycle.expenseCycleId && (
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={20}
-                            color="#4f39f6"
-                          />
-                        )}
-                    </TouchableOpacity>
-                  ))}
+              {expenseTypes.map((type) => (
+                <TouchableOpacity
+                  key={type.expenseTypeId}
+                  onPress={() => handleSelectType(type.expenseTypeId)}
+                  style={{
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#f3f4f6',
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: '#1e2939',
+                    }}
+                  >
+                    {type.expenseTypeName}
+                  </Text>
+                  {selectedExpenseId &&
+                    expenses.find(e => e.id === selectedExpenseId)?.typeId ===
+                      type.expenseTypeId && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={20}
+                        color="#4f39f6"
+                      />
+                    )}
+                </TouchableOpacity>
+              ))}
             </ScrollView>
           </View>
         </View>
