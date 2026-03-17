@@ -312,6 +312,24 @@ namespace KirayaDoor.Api.Controllers
             }
         }
 
+        // PUT: api/tenants/{tenantId}/mark-active
+        [HttpPut("tenants/{tenantId}/mark-active")]
+        public async Task<ActionResult> MarkTenantAsActive(int tenantId)
+        {
+            try
+            {
+                var success = await _tenantStatementService.MarkTenantAsActiveAsync(tenantId);
+                if (!success)
+                    return NotFound(new { error = "Tenant not found" });
+
+                return Ok(new { message = "Tenant marked as active" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         // GET: api/properties/{id}/units
         [HttpGet("{id}/units")]
         public async Task<ActionResult<IEnumerable<UnitDto>>> GetUnitsWithTenants(int id)

@@ -15,6 +15,7 @@ namespace KirayaDoor.Api.Services
         Task<StatementLineItemDto?> RecordPaymentAsync(int tenantId, RecordPaymentRequest request);
         Task<bool> DeleteTenantAsync(int tenantId);
         Task<bool> MarkTenantAsInactiveAsync(int tenantId);
+        Task<bool> MarkTenantAsActiveAsync(int tenantId);
     }
 
     public class TenantStatementService : ITenantStatementService
@@ -271,6 +272,43 @@ namespace KirayaDoor.Api.Services
                 if (cycle == null)
                     throw new ArgumentException("Invalid cycle type");
 
+                // Business Validations
+                // SecurityDeposit (2), Electricity (3), Water (4) - must be OneTime (1)
+                if ((request.ExpenseTypeId == 2 || request.ExpenseTypeId == 3 || request.ExpenseTypeId == 4) && request.CycleId != 1)
+                    throw new ArgumentException($"{expenseType.ExpenseTypeName} expense can only be OneTime");
+
+                // Rent (1) - must be Monthly (2) and check for overlaps
+                if (request.ExpenseTypeId == 1)
+                {
+                    if (request.CycleId != 2)
+                        throw new ArgumentException("Rent expense can only be Monthly");
+
+                    // Check for overlapping rents
+                    var tenantRents = await _context.TenantExpenses
+                        .Where(e => e.TenantId == tenantId && e.TenantExpenseTypeId == 1)
+                        .ToListAsync();
+
+                    var requestStartDate = request.StartDate ?? DateTime.Today;
+                    foreach (var existingRent in tenantRents)
+                    {
+                        var existingStart = existingRent.TenantExpenseStartDate;
+                        var existingEnd = existingRent.TenantExpenseEndDate ?? DateTime.MaxValue;
+
+                        // Check if new rent overlaps with existing rent
+                        if (requestStartDate < existingEnd)
+                        {
+                            throw new ArgumentException($"Rent overlaps with existing rent from {existingStart:yyyy-MM-dd} to {(existingRent.TenantExpenseEndDate.HasValue ? existingRent.TenantExpenseEndDate.Value.ToString("yyyy-MM-dd") : "ongoing")}. New rent must start from {existingEnd:yyyy-MM-dd}");
+                        }
+                    }
+                }
+
+                // Others (100) - comment is mandatory
+                if (request.ExpenseTypeId == 100)
+                {
+                    if (string.IsNullOrWhiteSpace(request.Comments))
+                        throw new ArgumentException("Comments are mandatory for 'Others' expense type");
+                }
+
                 var expense = new TenantExpense
                 {
                     TenantId = tenantId,
@@ -341,6 +379,52 @@ namespace KirayaDoor.Api.Services
                     expense.TenantExpenseStartDate.Month != today.Month)
                 {
                     throw new InvalidOperationException("Cannot update expenses from previous months");
+                }
+
+                // Business Validations for field updates
+                var finalExpenseTypeId = request.ExpenseTypeId.HasValue ? request.ExpenseTypeId.Value : expense.TenantExpenseTypeId;
+                var finalCycleId = request.CycleId.HasValue ? request.CycleId.Value : expense.TenantExpenseCycleId;
+
+                // SecurityDeposit (2), Electricity (3), Water (4) - must be OneTime (1)
+                if ((finalExpenseTypeId == 2 || finalExpenseTypeId == 3 || finalExpenseTypeId == 4) && finalCycleId != 1)
+                {
+                    var typeNames = new Dictionary<int, string> { { 2, "SecurityDeposit" }, { 3, "Electricity" }, { 4, "Water" } };
+                    throw new ArgumentException($"{typeNames[finalExpenseTypeId]} expense can only be OneTime");
+                }
+
+                // Rent (1) - must be Monthly (2) and check for overlaps with other rents
+                if (finalExpenseTypeId == 1)
+                {
+                    if (finalCycleId != 2)
+                        throw new ArgumentException("Rent expense can only be Monthly");
+
+                    // Check for overlapping rents (excluding current expense)
+                    var tenantRents = await _context.TenantExpenses
+                        .Where(e => e.TenantId == tenantId && e.TenantExpenseTypeId == 1 && e.TenantExpenseId != tenantExpenseId)
+                        .ToListAsync();
+
+                    var requestStartDate = request.StartDate.HasValue ? request.StartDate.Value : expense.TenantExpenseStartDate;
+                    var requestEndDate = request.EndDate.HasValue ? request.EndDate.Value : expense.TenantExpenseEndDate;
+
+                    foreach (var existingRent in tenantRents)
+                    {
+                        var existingStart = existingRent.TenantExpenseStartDate;
+                        var existingEnd = existingRent.TenantExpenseEndDate ?? DateTime.MaxValue;
+
+                        // Check if new rent overlaps with existing rent
+                        if (requestStartDate < existingEnd && (requestEndDate == null || requestEndDate > existingStart))
+                        {
+                            throw new ArgumentException($"Rent overlaps with existing rent from {existingStart:yyyy-MM-dd} to {(existingRent.TenantExpenseEndDate.HasValue ? existingRent.TenantExpenseEndDate.Value.ToString("yyyy-MM-dd") : "ongoing")}");
+                        }
+                    }
+                }
+
+                // Others (100) - comment is mandatory
+                if (finalExpenseTypeId == 100)
+                {
+                    var comments = request.Comments ?? expense.Comments;
+                    if (string.IsNullOrWhiteSpace(comments))
+                        throw new ArgumentException("Comments are mandatory for 'Others' expense type");
                 }
 
                 expense.TenantExpenseAmount = request.Amount;
@@ -631,14 +715,57 @@ namespace KirayaDoor.Api.Services
                     return false;
 
                 tenant.IsActive = false;
+
+                // Set TenantExpenseEndDate to today for all expenses that:
+                // 1. Don't have ExpenseCycle as "OneTime" (ExpenseCycleId != 1)
+                // 2. Don't already have TenantExpenseEndDate set (where TenantExpenseEndDate is null)
+                var expenses = await _context.TenantExpenses
+                    .Where(e => e.TenantId == tenantId 
+                        && e.TenantExpenseEndDate == null 
+                        && e.TenantExpenseCycleId != 1) // OneTime cycle has id 1
+                    .ToListAsync();
+
+                // Get today's date in IST (Indian Standard Time)
+                var istTimeZone = TimeZoneInfo.FindSystemTimeZoneById("India Standard Time");
+                var today = TimeZoneInfo.ConvertTime(DateTime.UtcNow, istTimeZone).Date;
+                
+                foreach (var expense in expenses)
+                {
+                    expense.TenantExpenseEndDate = today;
+                }
+
                 await _context.SaveChangesAsync();
-                _logger.LogInformation($"Tenant marked as inactive: {tenantId}");
+                _logger.LogInformation($"Tenant marked as inactive: {tenantId}, updated {expenses.Count} expenses");
 
                 return true;
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error marking tenant as inactive: {ex.Message}");
+                throw;
+            }
+        }
+
+        public async Task<bool> MarkTenantAsActiveAsync(int tenantId)
+        {
+            try
+            {
+                var tenant = await _context.Tenants
+                    .Where(t => t.TenantId == tenantId)
+                    .FirstOrDefaultAsync();
+
+                if (tenant == null)
+                    return false;
+
+                tenant.IsActive = true;
+                await _context.SaveChangesAsync();
+                _logger.LogInformation($"Tenant marked as active: {tenantId}");
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error marking tenant as active: {ex.Message}");
                 throw;
             }
         }

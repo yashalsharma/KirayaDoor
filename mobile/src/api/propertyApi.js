@@ -1191,5 +1191,43 @@ export const propertyApi = {
       throw error;
     }
   },
+
+  // Mark tenant as active (move in)
+  markTenantAsActive: async (tenantId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/properties/tenants/${tenantId}/mark-active`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = 'Failed to mark tenant as active';
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        return data;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error marking tenant as active:', error);
+      throw error;
+    }
+  },
 };
 

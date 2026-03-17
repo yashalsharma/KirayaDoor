@@ -29,8 +29,10 @@ function EditTenantDetailsSheet({ route, navigation }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [isActive, setIsActive] = useState(initialDetails?.isActive || false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [moveOutDialogVisible, setMoveOutDialogVisible] = useState(false);
+  const [moveInDialogVisible, setMoveInDialogVisible] = useState(false);
   
   // Expense state
   const [existingExpenses, setExistingExpenses] = useState([]);
@@ -98,13 +100,15 @@ function EditTenantDetailsSheet({ route, navigation }) {
 
   // Add new expense form
   const addNewExpense = () => {
+    const todayDate = getTodayIST();
+    console.log('Creating new expense with startDate:', todayDate, 'Type:', typeof todayDate);
     setNewExpenses([
       ...newExpenses,
       {
         id: Date.now(),
         typeId: null,
         cycleId: null,
-        startDate: new Date(),
+        startDate: todayDate,
         endDate: null,
         amount: '',
         comments: '',
@@ -147,22 +151,121 @@ function EditTenantDetailsSheet({ route, navigation }) {
     setSelectedExpenseId(null);
   };
 
-  // Select from picker
+  // Helper function to determine if expense type requires OneTime cycle
+  const isOneTimeCycleRequired = (expenseTypeId) => {
+    // SecurityDeposit (2), Electricity (3), Water (4) - must be OneTime
+    return expenseTypeId === 2 || expenseTypeId === 3 || expenseTypeId === 4;
+  };
+
+  // Helper function to determine if expense type requires Month cycle
+  const isMonthCycleRequired = (expenseTypeId) => {
+    // Rent (1) - must be Month
+    return expenseTypeId === 1;
+  };
+
+  // Helper function to check if comment is mandatory for expense type
+  const isCommentMandatory = (expenseTypeId) => {
+    // Others (100) - comment is mandatory
+    return expenseTypeId === 100;
+  };
+
+  // Get the enforced cycle ID for an expense type, or null if no enforcement
+  const getEnforcedCycleId = (expenseTypeId) => {
+    // Rent (1) -> Month (2), Everything else -> OneTime (1)
+    if (expenseTypeId === 1) return 2; // Rent -> Month
+    return 1; // Everything else -> OneTime
+  };
+
+  // Validate rent conflicts - check that no active rent exists for the same date range
+  const validateRentConflict = (newRent, excludeExpenseId = null) => {
+    // Only validate for Rent type (1)
+    if (newRent.typeId !== 1) return null;
+
+    const newStartDate = newRent.startDate || getTodayIST();
+    const newEndDate = newRent.endDate;
+
+    // Get all rent expenses (existing + new, excluding the current one being validated)
+    const allRents = [
+      ...existingExpenses.filter(e => e.tenantExpenseTypeId === 1 && e.tenantExpenseId !== excludeExpenseId),
+      ...newExpenses.filter(e => e.typeId === 1 && e.id !== newRent.id),
+    ];
+
+    // Check for conflicts with existing rents
+    for (const existingRent of allRents) {
+      // Handle both property naming conventions (DB: tenantExpenseStartDate vs in-memory: startDate)
+      const existingStartDate = new Date(existingRent.tenantExpenseStartDate || existingRent.startDate);
+      const existingEndDate = (existingRent.tenantExpenseEndDate || existingRent.endDate) ? new Date(existingRent.tenantExpenseEndDate || existingRent.endDate) : null;
+
+      // Case 1: Existing rent has no end date (ongoing/active)
+      if (!existingEndDate) {
+        // New rent cannot start on or after the existing rent's start date
+        if (newStartDate >= existingStartDate) {
+          return `Active rent exists from ${formatDateForDisplay(existingStartDate)}. Cannot add overlapping rent.`;
+        }
+      }
+      // Case 2: Existing rent has an end date
+      else {
+        // New rent start date cannot fall within or overlap with existing rent dates
+        // Valid new rent must start on or after (endDate + 1 day)
+        if (newStartDate >= existingStartDate && newStartDate <= existingEndDate) {
+          return `Rent conflict: existing rent from ${formatDateForDisplay(existingStartDate)} to ${formatDateForDisplay(existingEndDate)}. New rent must start from ${formatDateForDisplay(new Date(existingEndDate.getTime() + 86400000))}.`;
+        }
+      }
+    }
+
+    return null; // No conflicts
+  };
+
+  // Sort expenses: Rent first, then by date (latest first)
+  const getSortedExpenses = (expenses) => {
+    return [...expenses].sort((a, b) => {
+      // Rent (typeId 1) always comes first
+      const aIsRent = a.tenantExpenseTypeId === 1;
+      const bIsRent = b.tenantExpenseTypeId === 1;
+      
+      if (aIsRent && !bIsRent) return -1;
+      if (!aIsRent && bIsRent) return 1;
+      
+      // For non-rent or both rent, sort by date (latest first)
+      const aDate = new Date(a.tenantExpenseStartDate || a.startDate);
+      const bDate = new Date(b.tenantExpenseStartDate || b.startDate);
+      return bDate - aDate; // Latest first
+    });
+  };
+
+  // Handle expense type selection (automatically sets cycle)
+  const handleExpenseTypeSelect = (typeId, isNewExpense = false, expenseId = null) => {
+    const cycleId = getEnforcedCycleId(typeId);
+    
+    if (isNewExpense && expenseId) {
+      // Adding new expense with bar selection - single batched update
+      setNewExpenses(
+        newExpenses.map(e => {
+          if (e.id === expenseId) {
+            return {
+              ...e,
+              typeId: typeId,
+              cycleId: cycleId,
+            };
+          }
+          return e;
+        })
+      );
+    } else if (expandedExpenseId) {
+      // Editing existing expense
+      setInlineEditTypeId(typeId);
+      setInlineEditCycleId(cycleId);
+    }
+  };
+
+  // Select from picker (only for type now, picker is simplified)
   const selectFromPicker = (value) => {
     if (expandedExpenseId) {
       // Inline editing existing expense
-      if (pickerType === 'type') {
-        setInlineEditTypeId(value);
-      } else if (pickerType === 'cycle') {
-        setInlineEditCycleId(value);
-      }
+      handleExpenseTypeSelect(value);
     } else {
       // Editing new expense
-      if (pickerType === 'type') {
-        updateNewExpense(selectedExpenseId, 'typeId', value);
-      } else if (pickerType === 'cycle') {
-        updateNewExpense(selectedExpenseId, 'cycleId', value);
-      }
+      handleExpenseTypeSelect(value, true, selectedExpenseId);
     }
     closePicker();
   };
@@ -254,6 +357,24 @@ function EditTenantDetailsSheet({ route, navigation }) {
     setMoveOutDialogVisible(false);
   };
 
+  const confirmMoveInTenant = async () => {
+    try {
+      setIsSaving(true);
+      setMoveInDialogVisible(false);
+      await propertyApi.markTenantAsActive(tenantId);
+      // Update local state to show Move Out button instead
+      setIsActive(true);
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Failed to mark tenant as moved in');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const cancelMoveInTenant = () => {
+    setMoveInDialogVisible(false);
+  };
+
   // Expense handlers
   const handleAddExpense = () => {
     setExpenseTypeId(null);
@@ -290,6 +411,41 @@ function EditTenantDetailsSheet({ route, navigation }) {
   const closeEditExistingExpense = async () => {
     if (!inlineEditAmount.trim()) {
       Alert.alert('Validation', 'Amount is required');
+      return;
+    }
+
+    // Business Validation: Cycle type constraints
+    if (isOneTimeCycleRequired(inlineEditTypeId) && inlineEditCycleId !== 1) {
+      const typeName = expenseTypes.find(t => t.expenseTypeId === inlineEditTypeId)?.expenseTypeName;
+      Alert.alert('Validation', `${typeName} expense can only be OneTime`);
+      return;
+    }
+
+    if (isMonthCycleRequired(inlineEditTypeId) && inlineEditCycleId !== 2) {
+      Alert.alert('Validation', 'Rent expense can only be Monthly');
+      return;
+    }
+
+    // Business Validation: Comments mandatory for Others
+    if (isCommentMandatory(inlineEditTypeId)) {
+      if (!inlineEditComments.trim()) {
+        Alert.alert('Validation', 'Comments are mandatory for "Others" expense type');
+        return;
+      }
+    }
+
+    // Business Validation: Rent conflict check
+    const rentConflictError = validateRentConflict(
+      {
+        typeId: inlineEditTypeId,
+        startDate: inlineEditStartDate,
+        endDate: inlineEditEndDate,
+        id: expandedExpenseId,
+      },
+      expandedExpenseId // Exclude current expense from conflict check
+    );
+    if (rentConflictError) {
+      Alert.alert('Validation', rentConflictError);
       return;
     }
 
@@ -359,8 +515,13 @@ function EditTenantDetailsSheet({ route, navigation }) {
         setOriginalDateValue(inlineEditStartDate || new Date());
         setDatePickerValue(inlineEditStartDate || new Date());
       } else if (mode === 'end') {
-        setOriginalDateValue(inlineEditEndDate || new Date());
-        setDatePickerValue(inlineEditEndDate || new Date());
+        // For end date, default to start date if not yet set
+        setOriginalDateValue(inlineEditEndDate || inlineEditStartDate);
+        setDatePickerValue(inlineEditEndDate || inlineEditStartDate);
+      } else if (mode === 'expenseDate') {
+        // For OneTime expenses, use start date
+        setOriginalDateValue(inlineEditStartDate || new Date());
+        setDatePickerValue(inlineEditStartDate || new Date());
       }
     }
     setDatePickerVisible(true);
@@ -382,6 +543,10 @@ function EditTenantDetailsSheet({ route, navigation }) {
         setInlineEditStartDate(normalizedDate);
       } else if (datePickerMode === 'end') {
         setInlineEditEndDate(normalizedDate);
+      } else if (datePickerMode === 'expenseDate') {
+        // For OneTime expenses, set both start and end date to the same value
+        setInlineEditStartDate(normalizedDate);
+        setInlineEditEndDate(normalizedDate);
       }
     } else if (selectedExpenseId) {
       // Adding/editing new expense
@@ -389,6 +554,15 @@ function EditTenantDetailsSheet({ route, navigation }) {
         updateNewExpense(selectedExpenseId, 'startDate', normalizedDate);
       } else if (datePickerMode === 'end') {
         updateNewExpense(selectedExpenseId, 'endDate', normalizedDate);
+      } else if (datePickerMode === 'expenseDate') {
+        // For OneTime expenses, set both startDate and endDate to the same date
+        setNewExpenses(
+          newExpenses.map(e =>
+            e.id === selectedExpenseId
+              ? { ...e, startDate: normalizedDate, endDate: normalizedDate }
+              : e
+          )
+        );
       }
     }
     closeDatePicker();
@@ -402,6 +576,12 @@ function EditTenantDetailsSheet({ route, navigation }) {
   const closeDatePicker = () => {
     setDatePickerVisible(false);
     setDatePickerMode(null);
+  };
+
+  const getTodayIST = () => {
+    const now = new Date();
+    // Create a date normalized to just the date portion (no time)
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   };
 
   const formatDateForDisplay = (date) => {
@@ -447,6 +627,7 @@ function EditTenantDetailsSheet({ route, navigation }) {
     try {
       setIsAddingExpense(true);
       for (const expense of newExpenses) {
+        
         if (!expense.typeId) {
           Alert.alert('Validation', 'Please select an expense type for all expenses');
           setIsAddingExpense(false);
@@ -457,15 +638,24 @@ function EditTenantDetailsSheet({ route, navigation }) {
           setIsAddingExpense(false);
           return;
         }
-        if (!expense.cycleId) {
-          Alert.alert('Validation', 'Please select a cycle for all expenses');
+
+
+        // Business Validation: Cycle type constraints (using helper functions for clarity)
+        if (isOneTimeCycleRequired(expense.typeId) && expense.cycleId !== 1) {
+          const typeName = expenseTypes.find(t => t.expenseTypeId === expense.typeId)?.expenseTypeName;
+          Alert.alert('Validation', `${typeName} expense can only be OneTime`);
           setIsAddingExpense(false);
           return;
         }
 
-        // Check if type is 'others' and comments is mandatory
-        const expenseTypeSelected = expenseTypes.find(t => t.expenseTypeId === expense.typeId);
-        if (expenseTypeSelected?.expenseTypeName?.toLowerCase() === 'others') {
+        if (isMonthCycleRequired(expense.typeId) && expense.cycleId !== 2) {
+          Alert.alert('Validation', 'Rent expense must be Monthly (automatically set)');
+          setIsAddingExpense(false);
+          return;
+        }
+
+        // Business Validation: Comments mandatory for Others
+        if (isCommentMandatory(expense.typeId)) {
           if (!expense.comments.trim()) {
             Alert.alert('Validation', 'Comments are mandatory for "Others" expense type');
             setIsAddingExpense(false);
@@ -473,11 +663,19 @@ function EditTenantDetailsSheet({ route, navigation }) {
           }
         }
 
+        // Business Validation: Rent conflict check
+        const rentConflictError = validateRentConflict(expense);
+        if (rentConflictError) {
+          Alert.alert('Validation', rentConflictError);
+          setIsAddingExpense(false);
+          return;
+        }
+
         await propertyApi.addTenantExpense(tenantId, {
           expenseTypeId: expense.typeId,
           cycleId: expense.cycleId,
           amount: parseFloat(expense.amount),
-          startDate: expense.startDate,
+          startDate: expense.startDate || getTodayIST(),
           endDate: expense.endDate,
           comments: expense.comments.trim() || null,
           isAlreadyPaid: false,
@@ -814,7 +1012,7 @@ function EditTenantDetailsSheet({ route, navigation }) {
           {/* Existing Expenses - Inline Editable Forms */}
           {existingExpenses.length > 0 && (
             <View style={{ marginBottom: 16 }}>
-              {existingExpenses.map((expense) => (
+              {getSortedExpenses(existingExpenses).map((expense) => (
                 <TouchableOpacity
                   key={expense.tenantExpenseId}
                   onPress={() => toggleEditExistingExpense(expense)}
@@ -875,6 +1073,10 @@ function EditTenantDetailsSheet({ route, navigation }) {
                             {expense.cycleName} • ₹{expense.tenantExpenseAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                           </Text>
                         </View>
+                        <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                          {expense.tenantExpenseTypeId === 1 ? 'From' : 'Date'}: {formatDateForDisplay(expense.tenantExpenseStartDate || expense.startDate)}
+                          {expense.tenantExpenseEndDate && ` - ${formatDateForDisplay(expense.tenantExpenseEndDate || expense.endDate)}`}
+                        </Text>
                         {expense.comments && (
                           <Text
                             style={{
@@ -925,185 +1127,169 @@ function EditTenantDetailsSheet({ route, navigation }) {
                           />
                         </View>
 
-                        {/* Type & Cycle */}
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            gap: 10,
-                            marginBottom: 10,
-                          }}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                              <Ionicons name="pricetag" size={13} color="#4f39f6" />
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: '700',
-                                  color: '#364153',
-                                }}
-                              >
-                                Type<Text style={{ color: '#fb2c36' }}> *</Text>
-                              </Text>
-                            </View>
-                            <TouchableOpacity
-                              onPress={() => {
-                                setSelectedExpenseId(expandedExpenseId);
-                                setPickerType('type');
-                                setPickerVisible(true);
-                              }}
+                        {/* Expense Type Selection */}
+                        <View style={{ marginBottom: 10 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                            <Ionicons name="pricetag" size={14} color="#4f39f6" />
+                            <Text
                               style={{
-                                backgroundColor: '#f9fafb',
-                                borderRadius: 12,
-                                paddingHorizontal: 14,
-                                paddingVertical: 10,
-                                borderWidth: 1.108,
-                                borderColor: '#e5e7eb',
-                                flexDirection: 'row',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
+                                fontSize: 13,
+                                fontWeight: '700',
+                                color: '#364153',
                               }}
                             >
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  color: inlineEditTypeId ? '#1e2939' : 'rgba(10,10,10,0.5)',
-                                  flex: 1,
-                                }}
-                              >
-                                {expenseTypes.find(t => t.expenseTypeId === inlineEditTypeId)
-                                  ?.expenseTypeName || 'Select type'}
-                              </Text>
-                              <Ionicons name="chevron-down" size={16} color="#d1d5db" />
-                            </TouchableOpacity>
+                              Expense Type
+                              <Text style={{ color: '#fb2c36' }}> *</Text>
+                            </Text>
                           </View>
-
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                              <Ionicons name="calendar" size={13} color="#4f39f6" />
-                              <Text
+                          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                            {expenseTypes.map((type) => (
+                              <TouchableOpacity
+                                key={type.expenseTypeId}
+                                onPress={() => handleExpenseTypeSelect(type.expenseTypeId)}
                                 style={{
-                                  fontSize: 12,
-                                  fontWeight: '700',
-                                  color: '#364153',
+                                  backgroundColor: inlineEditTypeId === type.expenseTypeId ? '#4f39f6' : '#f3f4f6',
+                                  borderRadius: 12,
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 8,
                                 }}
                               >
-                                Cycle<Text style={{ color: '#fb2c36' }}> *</Text>
-                              </Text>
-                            </View>
-                            <TouchableOpacity
-                              onPress={() => {
-                                setSelectedExpenseId(expandedExpenseId);
-                                setPickerType('cycle');
-                                setPickerVisible(true);
-                              }}
-                              style={{
-                                backgroundColor: '#f9fafb',
-                                borderRadius: 12,
-                                paddingHorizontal: 14,
-                                paddingVertical: 10,
-                                borderWidth: 1.108,
-                                borderColor: '#e5e7eb',
-                                flexDirection: 'row',
-                                justifyContent: 'space-between',
-                                alignItems: 'center',
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  color: inlineEditCycleId ? '#1e2939' : 'rgba(10,10,10,0.5)',
-                                  flex: 1,
-                                }}
-                              >
-                                {expenseCycles.find(c => c.expenseCycleId === inlineEditCycleId)
-                                  ?.expenseCycleName || 'Select cycle'}
-                              </Text>
-                              <Ionicons name="chevron-down" size={16} color="#d1d5db" />
-                            </TouchableOpacity>
+                                <Text
+                                  style={{
+                                    color: inlineEditTypeId === type.expenseTypeId ? 'white' : '#1e2939',
+                                    fontSize: 12,
+                                    fontWeight: '600',
+                                  }}
+                                >
+                                  {type.expenseTypeName}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
                           </View>
                         </View>
 
-                        {/* Start Date & End Date */}
-                        <View
-                          style={{
-                            flexDirection: 'row',
-                            gap: 10,
-                            marginBottom: 10,
-                          }}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                              <Ionicons name="calendar" size={13} color="#4f39f6" />
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: '700',
-                                  color: '#364153',
-                                }}
-                              >
-                                Start Date
-                              </Text>
-                            </View>
-                            <TouchableOpacity
-                              onPress={() => openDatePicker('start')}
+                        {/* Date Fields - Show only after type is selected */}
+                        {inlineEditTypeId ? (
+                          inlineEditTypeId === 1 ? (
+                            // Rent: Show Start Date and End Date
+                            <View
                               style={{
-                                backgroundColor: '#f9fafb',
-                                borderRadius: 12,
-                                paddingHorizontal: 14,
-                                paddingVertical: 10,
-                                borderWidth: 1.108,
-                                borderColor: '#e5e7eb',
-                                justifyContent: 'center',
+                                flexDirection: 'row',
+                                gap: 10,
+                                marginBottom: 10,
                               }}
                             >
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  color: inlineEditStartDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
-                                }}
-                              >
-                                {formatDateForDisplay(inlineEditStartDate)}
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                                  <Ionicons name="calendar" size={13} color="#4f39f6" />
+                                  <Text
+                                    style={{
+                                      fontSize: 12,
+                                      fontWeight: '700',
+                                      color: '#364153',
+                                    }}
+                                  >
+                                    Start Date
+                                  </Text>
+                                </View>
+                                <TouchableOpacity
+                                  onPress={() => openDatePicker('start')}
+                                  style={{
+                                    backgroundColor: '#f9fafb',
+                                    borderRadius: 12,
+                                    paddingHorizontal: 14,
+                                    paddingVertical: 10,
+                                    borderWidth: 1.108,
+                                    borderColor: '#e5e7eb',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      fontSize: 12,
+                                      color: inlineEditStartDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                                    }}
+                                  >
+                                    {formatDateForDisplay(inlineEditStartDate)}
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
 
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                              <Ionicons name="calendar" size={13} color="#4f39f6" />
-                              <Text
-                                style={{
-                                  fontSize: 12,
-                                  fontWeight: '700',
-                                  color: '#364153',
-                                }}
-                              >
-                                End Date
-                              </Text>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                                  <Ionicons name="calendar" size={13} color="#4f39f6" />
+                                  <Text
+                                    style={{
+                                      fontSize: 12,
+                                      fontWeight: '700',
+                                      color: '#364153',
+                                    }}
+                                  >
+                                    End Date
+                                  </Text>
+                                </View>
+                                <TouchableOpacity
+                                  onPress={() => openDatePicker('end')}
+                                  style={{
+                                    backgroundColor: '#f9fafb',
+                                    borderRadius: 12,
+                                    paddingHorizontal: 14,
+                                    paddingVertical: 10,
+                                    borderWidth: 1.108,
+                                    borderColor: '#e5e7eb',
+                                    justifyContent: 'center',
+                                  }}
+                                >
+                                  <Text
+                                    style={{
+                                      fontSize: 12,
+                                      color: inlineEditEndDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                                    }}
+                                  >
+                                    {formatDateForDisplay(inlineEditEndDate)}
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
                             </View>
-                            <TouchableOpacity
-                              onPress={() => openDatePicker('end')}
-                              style={{
-                                backgroundColor: '#f9fafb',
-                                borderRadius: 12,
-                                paddingHorizontal: 14,
-                                paddingVertical: 10,
-                                borderWidth: 1.108,
-                                borderColor: '#e5e7eb',
-                                justifyContent: 'center',
-                              }}
-                            >
-                              <Text
+                          ) : (
+                            // OneTime: Show Expense Date
+                            <View style={{ marginBottom: 10 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                                <Ionicons name="calendar" size={13} color="#4f39f6" />
+                                <Text
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: '700',
+                                    color: '#364153',
+                                  }}
+                                >
+                                  Expense Date
+                                </Text>
+                              </View>
+                              <TouchableOpacity
+                                onPress={() => openDatePicker('expenseDate')}
                                 style={{
-                                  fontSize: 12,
-                                  color: inlineEditEndDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                                  backgroundColor: '#f9fafb',
+                                  borderRadius: 12,
+                                  paddingHorizontal: 14,
+                                  paddingVertical: 10,
+                                  borderWidth: 1.108,
+                                  borderColor: '#e5e7eb',
+                                  justifyContent: 'center',
                                 }}
                               >
-                                {formatDateForDisplay(inlineEditEndDate)}
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
+                                <Text
+                                  style={{
+                                    fontSize: 12,
+                                    color: inlineEditStartDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                                  }}
+                                >
+                                  {formatDateForDisplay(inlineEditStartDate)}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          )
+                        ) : null}
 
                         {/* Comments */}
                         <View style={{ marginBottom: 16 }}>
@@ -1117,6 +1303,9 @@ function EditTenantDetailsSheet({ route, navigation }) {
                               }}
                             >
                               Comments
+                              {isCommentMandatory(inlineEditTypeId) && (
+                                <Text style={{ color: '#fb2c36' }}> *</Text>
+                              )}
                             </Text>
                           </View>
                           <TextInput
@@ -1132,7 +1321,7 @@ function EditTenantDetailsSheet({ route, navigation }) {
                               minHeight: 60,
                               textAlignVertical: 'top',
                             }}
-                            placeholder="Enter comments (optional)"
+                            placeholder={isCommentMandatory(inlineEditTypeId) ? "Enter comments (required)" : "Enter comments (optional)"}
                             placeholderTextColor="rgba(10,10,10,0.5)"
                             multiline
                             value={inlineEditComments}
@@ -1248,189 +1437,219 @@ function EditTenantDetailsSheet({ route, navigation }) {
                     />
                   </View>
 
-                  {/* Type & Cycle */}
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      gap: 10,
-                      marginBottom: 10,
-                    }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                        <Ionicons name="pricetag" size={13} color="#4f39f6" />
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: '700',
-                            color: '#364153',
-                          }}
-                        >
-                          Type<Text style={{ color: '#fb2c36' }}> *</Text>
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => openTypePicker(expense.id)}
+                  {/* Expense Type Selection */}
+                  <View style={{ marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                      <Ionicons name="pricetag" size={14} color="#4f39f6" />
+                      <Text
                         style={{
-                          backgroundColor: '#f9fafb',
-                          borderRadius: 12,
-                          paddingHorizontal: 14,
-                          paddingVertical: 10,
-                          borderWidth: 1.108,
-                          borderColor: '#e5e7eb',
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
+                          fontSize: 13,
+                          fontWeight: '700',
+                          color: '#364153',
                         }}
                       >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            color: expense.typeId ? '#1e2939' : 'rgba(10,10,10,0.5)',
-                            flex: 1,
-                          }}
-                        >
-                          {expenseTypes.find(t => t.expenseTypeId === expense.typeId)
-                            ?.expenseTypeName || 'Select type'}
-                        </Text>
-                        <Ionicons name="chevron-down" size={16} color="#d1d5db" />
-                      </TouchableOpacity>
+                        Expense Type
+                        <Text style={{ color: '#fb2c36' }}> *</Text>
+                      </Text>
                     </View>
-
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                        <Ionicons name="calendar" size={13} color="#4f39f6" />
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: '700',
-                            color: '#364153',
-                          }}
-                        >
-                          Cycle<Text style={{ color: '#fb2c36' }}> *</Text>
-                        </Text>
+                    {expenseTypes.length === 0 ? (
+                      <Text style={{ color: '#ef4444', fontSize: 12 }}>Loading expense types...</Text>
+                    ) : (
+                      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                        {expenseTypes.map((type) => (
+                          <TouchableOpacity
+                            key={type.expenseTypeId}
+                            activeOpacity={0.7}
+                            onPress={() => {
+                              const cycleId = getEnforcedCycleId(type.expenseTypeId);
+                              console.log('Type button pressed. Current expense before update:', {
+                                id: expense.id,
+                                startDate: expense.startDate,
+                                typeId: expense.typeId,
+                              });
+                              
+                              // Update all fields in a single state update
+                              setNewExpenses(
+                                newExpenses.map(e => {
+                                  if (e.id === expense.id) {
+                                    const updatedExpense = {
+                                      ...e,
+                                      typeId: type.expenseTypeId,
+                                      cycleId: cycleId,
+                                    };
+                                    console.log('Updated expense after spread:', updatedExpense);
+                                    // Clear end date if switching away from Rent
+                                    if (type.expenseTypeId !== 1) {
+                                      updatedExpense.endDate = null;
+                                    }
+                                    return updatedExpense;
+                                  }
+                                  return e;
+                                })
+                              );
+                            }}
+                            style={{
+                              backgroundColor: expense.typeId === type.expenseTypeId ? '#4f39f6' : '#f3f4f6',
+                              borderRadius: 12,
+                              paddingHorizontal: 12,
+                              paddingVertical: 8,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                color: expense.typeId === type.expenseTypeId ? 'white' : '#1e2939',
+                                fontSize: 12,
+                                fontWeight: '600',
+                              }}
+                            >
+                              {type.expenseTypeName}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
                       </View>
-                      <TouchableOpacity
-                        onPress={() => openCyclePicker(expense.id)}
-                        style={{
-                          backgroundColor: '#f9fafb',
-                          borderRadius: 12,
-                          paddingHorizontal: 14,
-                          paddingVertical: 10,
-                          borderWidth: 1.108,
-                          borderColor: '#e5e7eb',
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            color: expense.cycleId ? '#1e2939' : 'rgba(10,10,10,0.5)',
-                            flex: 1,
-                          }}
-                        >
-                          {expenseCycles.find(c => c.expenseCycleId === expense.cycleId)
-                            ?.expenseCycleName || 'Select cycle'}
-                        </Text>
-                        <Ionicons name="chevron-down" size={16} color="#d1d5db" />
-                      </TouchableOpacity>
-                    </View>
+                    )}
                   </View>
 
-                  {/* Start Date & End Date */}
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      gap: 10,
-                      marginBottom: 10,
-                    }}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                        <Ionicons name="calendar" size={13} color="#4f39f6" />
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: '700',
-                            color: '#364153',
-                          }}
-                        >
-                          Start Date
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setSelectedExpenseId(expense.id);
-                          setDatePickerMode('start');
-                          setOriginalDateValue(expense.startDate || new Date());
-                          setDatePickerValue(expense.startDate || new Date());
-                          setDatePickerVisible(true);
-                        }}
+                  {/* Date Fields - Show only after type is selected */}
+                  {expense.typeId ? (
+                    expense.typeId === 1 ? (
+                      // Rent: Show Start Date and End Date
+                      <View
                         style={{
-                          backgroundColor: '#f9fafb',
-                          borderRadius: 12,
-                          paddingHorizontal: 14,
-                          paddingVertical: 10,
-                          borderWidth: 1.108,
-                          borderColor: '#e5e7eb',
-                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: 10,
+                          marginBottom: 10,
                         }}
                       >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            color: expense.startDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
-                          }}
-                        >
-                          {formatDateForDisplay(expense.startDate)}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                            <Ionicons name="calendar" size={13} color="#4f39f6" />
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: '700',
+                                color: '#364153',
+                              }}
+                            >
+                              Start Date
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setSelectedExpenseId(expense.id);
+                              setDatePickerMode('start');
+                              setOriginalDateValue(expense.startDate);
+                              setDatePickerValue(expense.startDate);
+                              setDatePickerVisible(true);
+                            }}
+                            style={{
+                              backgroundColor: '#f9fafb',
+                              borderRadius: 12,
+                              paddingHorizontal: 14,
+                              paddingVertical: 10,
+                              borderWidth: 1.108,
+                              borderColor: '#e5e7eb',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: expense.startDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                              }}
+                            >
+                              {formatDateForDisplay(expense.startDate || getTodayIST())}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
 
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
-                        <Ionicons name="calendar" size={13} color="#4f39f6" />
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: '700',
-                            color: '#364153',
-                          }}
-                        >
-                          End Date
-                        </Text>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                            <Ionicons name="calendar" size={13} color="#4f39f6" />
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: '700',
+                                color: '#364153',
+                              }}
+                            >
+                              End Date
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setSelectedExpenseId(expense.id);
+                              setDatePickerMode('end');
+                              setOriginalDateValue(expense.endDate || expense.startDate);
+                              setDatePickerValue(expense.endDate || expense.startDate);
+                              setDatePickerVisible(true);
+                            }}
+                            style={{
+                              backgroundColor: '#f9fafb',
+                              borderRadius: 12,
+                              paddingHorizontal: 14,
+                              paddingVertical: 10,
+                              borderWidth: 1.108,
+                              borderColor: '#e5e7eb',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: expense.endDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                              }}
+                            >
+                              {formatDateForDisplay(expense.endDate)}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setSelectedExpenseId(expense.id);
-                          setDatePickerMode('end');
-                          setOriginalDateValue(expense.endDate || new Date());
-                          setDatePickerValue(expense.endDate || new Date());
-                          setDatePickerVisible(true);
-                        }}
-                        style={{
-                          backgroundColor: '#f9fafb',
-                          borderRadius: 12,
-                          paddingHorizontal: 14,
-                          paddingVertical: 10,
-                          borderWidth: 1.108,
-                          borderColor: '#e5e7eb',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Text
+                    ) : (
+                      // OneTime: Show single Expense Date
+                      <View style={{ marginBottom: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+                          <Ionicons name="calendar" size={13} color="#4f39f6" />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              fontWeight: '700',
+                              color: '#364153',
+                            }}
+                          >
+                            Expense Date
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setSelectedExpenseId(expense.id);
+                            setDatePickerMode('expenseDate');
+                            setOriginalDateValue(expense.startDate);
+                            setDatePickerValue(expense.startDate);
+                            setDatePickerVisible(true);
+                          }}
                           style={{
-                            fontSize: 12,
-                            color: expense.endDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                            backgroundColor: '#f9fafb',
+                            borderRadius: 12,
+                            paddingHorizontal: 14,
+                            paddingVertical: 10,
+                            borderWidth: 1.108,
+                            borderColor: '#e5e7eb',
+                            justifyContent: 'center',
                           }}
                         >
-                          {formatDateForDisplay(expense.endDate)}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: expense.startDate ? '#1e2939' : 'rgba(10,10,10,0.5)',
+                            }}
+                          >
+                            {formatDateForDisplay(expense.startDate)}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )
+                  ) : null}
 
                   {/* Comments */}
                   <View>
@@ -1512,9 +1731,57 @@ function EditTenantDetailsSheet({ route, navigation }) {
       {/* Action Buttons */}
       {!isKeyboardVisible && (
         <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 12 }}>
+          {/* Moved Out / Move In and Delete Buttons (side by side) */}
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            {/* Move Out / Move In Button */}
+            <TouchableOpacity
+              onPress={() => {
+                if (isActive) {
+                  setMoveOutDialogVisible(true);
+                } else {
+                  setMoveInDialogVisible(true);
+                }
+              }}
+              disabled={isSaving}
+              style={{
+                flex: 1,
+                backgroundColor: isActive ? '#fed7aa' : '#d1fae5',
+                borderRadius: 12,
+                paddingVertical: 14,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 16, fontWeight: '600', color: isActive ? '#b45309' : '#059669' }}>
+                {isActive ? 'Moved Out' : 'Move In'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Delete Button */}
+            <TouchableOpacity
+              onPress={() => setDeleteDialogVisible(true)}
+              disabled={isSaving}
+              style={{
+                flex: 1,
+                backgroundColor: '#fecaca',
+                borderRadius: 12,
+                paddingVertical: 14,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#dc2626' }}>Delete Tenant</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Save Changes Button (full width) */}
           <TouchableOpacity
             onPress={async () => {
+              // Save currently editing expense (if any)
+              if (expandedExpenseId) {
+                await closeEditExistingExpense();
+              }
+              // Save new expenses
               await saveNewExpenses();
+              // Save tenant details
               handleSave();
             }}
             disabled={isSaving || isAddingExpense}
@@ -1531,36 +1798,6 @@ function EditTenantDetailsSheet({ route, navigation }) {
             ) : (
               <Text style={{ fontSize: 16, fontWeight: '600', color: 'white' }}>Save Changes</Text>
             )}
-          </TouchableOpacity>
-
-          {/* Move Out Button - Only show if tenant is still active */}
-          {initialDetails?.isActive && (
-            <TouchableOpacity
-              onPress={() => setMoveOutDialogVisible(true)}
-              disabled={isSaving}
-              style={{
-                backgroundColor: '#fed7aa',
-                borderRadius: 12,
-                paddingVertical: 14,
-                alignItems: 'center',
-              }}
-            >
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#b45309' }}>Moved Out</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Delete Button */}
-          <TouchableOpacity
-            onPress={() => setDeleteDialogVisible(true)}
-            disabled={isSaving}
-            style={{
-              backgroundColor: '#fecaca',
-              borderRadius: 12,
-              paddingVertical: 14,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ fontSize: 16, fontWeight: '600', color: '#dc2626' }}>Delete Tenant</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1587,6 +1824,18 @@ function EditTenantDetailsSheet({ route, navigation }) {
         onConfirm={confirmMoveOutTenant}
         onCancel={cancelMoveOutTenant}
         isDangerous={true}
+      />
+
+      {/* Move In Confirmation Dialog */}
+      <ConfirmDialog
+        visible={moveInDialogVisible}
+        title="Confirm Move In"
+        message="Mark this tenant as moved in (active)?"
+        confirmText="Move In"
+        cancelText="Cancel"
+        onConfirm={confirmMoveInTenant}
+        onCancel={cancelMoveInTenant}
+        isDangerous={false}
       />
 
       {/* Delete Expense Confirmation Dialog */}

@@ -577,15 +577,24 @@ export default function TenantsScreen({ navigation, route }) {
         <FlatList
           data={tenants}
           renderItem={({ item, index }) => {
-            // Check if this is the first inactive tenant
+            // Get counts
             const activeTenants = tenants.filter(t => t.isActive);
+            const isLastActive = item.isActive && index === activeTenants.length - 1;
             const isFirstInactive = !item.isActive && index === activeTenants.length;
             
             return (
               <View>
-                {isFirstInactive && tenants.some(t => t.isActive) && (
+                {/* Show Add Tenant Card before inactive tenants section when all tenants are inactive */}
+                {isFirstInactive && activeTenants.length === 0 && (
+                  <AddTenantCard onPress={handleAddTenant} isLoading={isAddingTenant} />
+                )}
+                
+                {/* Show Inactive Tenants divider before first inactive tenant */}
+                {isFirstInactive && (
                   <TenantDivider label="Inactive Tenants" />
                 )}
+                
+                {/* Tenant Card */}
                 <TenantCard
                   item={item}
                   navigation={navigation}
@@ -595,6 +604,11 @@ export default function TenantsScreen({ navigation, route }) {
                   unitName={unitName}
                   propertyId={propertyId}
                 />
+                
+                {/* Show Add Tenant Card after last active tenant (if there are active tenants) */}
+                {isLastActive && activeTenants.length > 0 && (
+                  <AddTenantCard onPress={handleAddTenant} isLoading={isAddingTenant} />
+                )}
               </View>
             );
           }}
@@ -606,7 +620,7 @@ export default function TenantsScreen({ navigation, route }) {
             paddingHorizontal: 16,
             paddingVertical: 12,
           }}
-          ListFooterComponent={<AddTenantCard onPress={handleAddTenant} isLoading={isAddingTenant} />}
+          ListEmptyComponent={<AddTenantCard onPress={handleAddTenant} isLoading={isAddingTenant} />}
         />
       </Pressable>
 
